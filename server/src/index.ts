@@ -1,12 +1,12 @@
 import express from 'express';
 import cors from 'cors';
-import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import path from 'path';
 
 dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
 import { authMiddleware } from './middleware/auth';
+import { generalLimiter, scanLimiter } from './middleware/rateLimit';
 import scanRoutes from './routes/scan';
 import userRoutes from './routes/user';
 
@@ -19,28 +19,19 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '5mb' }));
 
-const scanLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 10,
-  message: { error: 'Too many scan requests, please try again later' },
-});
-
-const clickLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 60,
-  message: { error: 'Too many requests' },
-});
+// Apply general rate limit to all routes
+app.use(generalLimiter);
 
 // Health check (no auth)
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Protected routes
-app.use('/api/scan', authMiddleware, scanLimiter, scanRoutes);
+// Protected routes — scan routes get the stricter scanLimiter on POST
+app.use('/api/scan', authMiddleware, scanRoutes);
 app.use('/api/scans', authMiddleware, scanRoutes);
 app.use('/api/user', authMiddleware, userRoutes);
-app.use('/api', authMiddleware, clickLimiter, userRoutes);
+app.use('/api', authMiddleware, userRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

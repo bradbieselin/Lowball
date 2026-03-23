@@ -72,8 +72,8 @@ export default function RootNavigator() {
           )}
           <Stack.Screen name="Home" component={HomeScreen} />
           <Stack.Screen name="Camera" component={CameraScreen} />
-          <Stack.Screen name="Scanning" component={ScanningScreen} />
-          <Stack.Screen name="Results" component={ResultsScreen} />
+          <Stack.Screen name="Scanning" component={ScanningScreen} options={{ gestureEnabled: false }} />
+          <Stack.Screen name="Results" component={ResultsScreen} options={{ gestureEnabled: false }} />
           <Stack.Screen name="Profile" component={ProfileScreen} />
         </>
       )}

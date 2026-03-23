@@ -45,6 +45,26 @@ router.put('/profile', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// GET /api/user/saved-scans
+router.get('/saved-scans', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const savedScans = await prisma.savedScan.findMany({
+      where: { userId: req.userId! },
+      include: {
+        scan: {
+          include: { deals: { orderBy: { price: 'asc' }, take: 1 } },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json(savedScans);
+  } catch (error) {
+    console.error('Get saved scans error:', error);
+    res.status(500).json({ error: 'Failed to fetch saved scans' });
+  }
+});
+
 // GET /api/user/stats
 router.get('/stats', async (req: AuthenticatedRequest, res: Response) => {
   try {

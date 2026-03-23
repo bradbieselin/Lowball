@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,15 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Colors } from '../constants/colors';
 import ScanCard, { ScanCardData } from '../components/ScanCard';
 import { useUserStats } from '../hooks/useUser';
+import { useSavedScans } from '../hooks/useScans';
 import { useAuthContext } from '../contexts/AuthContext';
+import type { RootStackParamList } from '../navigation/RootNavigator';
+
+type ProfileNav = NativeStackNavigationProp<RootStackParamList, 'Profile'>;
 
 interface MenuRowProps {
   label: string;
@@ -40,9 +45,22 @@ function MenuRow({ label, rightText, rightTextColor, onPress }: MenuRowProps) {
 }
 
 export default function ProfileScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<ProfileNav>();
   const { signOut } = useAuthContext();
-  const { data: stats, isLoading } = useUserStats();
+  const { data: stats, isLoading: statsLoading } = useUserStats();
+  const { data: savedScansRaw, isLoading: savedLoading } = useSavedScans();
+
+  const savedScans: ScanCardData[] = (savedScansRaw ?? []).map((s: any) => ({
+    id: s.scan?.id ?? s.scanId,
+    imageUrl: s.scan?.imageUrl ?? '',
+    productName: s.scan?.productName ?? 'Unknown Product',
+    bestPrice: s.scan?.deals?.[0]?.price != null ? parseFloat(s.scan.deals[0].price) : 0,
+    originalPrice: s.scan?.estimatedRetailPrice != null ? parseFloat(s.scan.estimatedRetailPrice) : 0,
+  }));
+
+  const handleScanCardPress = useCallback((scanId: string) => {
+    navigation.navigate('Results', { scanId });
+  }, [navigation]);
 
   const handleSignOut = async () => {
     try {
@@ -66,7 +84,7 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>
@@ -76,7 +94,7 @@ export default function ProfileScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         {/* Savings Stats Card */}
         <View style={styles.statsCard}>
-          {isLoading ? (
+          {statsLoading ? (
             <ActivityIndicator color={Colors.accent} />
           ) : (
             <>
@@ -97,8 +115,18 @@ export default function ProfileScreen() {
         </View>
 
         {/* Saved Deals */}
-        <Text style={styles.sectionHeader}>Saved Deals</Text>
-        <Text style={styles.emptyText}>No saved deals yet. Start scanning!</Text>
+        <Text style={styles.sectionHeader}>
+          Saved Deals{savedScans.length > 0 ? ` (${savedScans.length})` : ''}
+        </Text>
+        {savedLoading ? (
+          <ActivityIndicator color={Colors.accent} style={{ marginVertical: 16 }} />
+        ) : savedScans.length === 0 ? (
+          <Text style={styles.emptyText}>No saved deals yet. Start scanning!</Text>
+        ) : (
+          savedScans.map((scan) => (
+            <ScanCard key={scan.id} scan={scan} onPress={handleScanCardPress} />
+          ))
+        )}
 
         {/* Account */}
         <Text style={styles.sectionHeader}>Account</Text>

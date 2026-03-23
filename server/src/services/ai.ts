@@ -13,6 +13,34 @@ export interface ProductIdentification {
   searchQueries: string[];
 }
 
+export async function generateSearchQueries(productName: string, category: string): Promise<string[]> {
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    max_tokens: 300,
+    messages: [
+      {
+        role: 'system',
+        content: `Given a product name and category, return a JSON array of 3-5 optimized search queries for finding this product on shopping sites. Include the full product name, abbreviated versions, and variations with "buy" or "deal" appended. Return ONLY a valid JSON array of strings, no markdown.`,
+      },
+      {
+        role: 'user',
+        content: `Product: "${productName}", Category: "${category}"`,
+      },
+    ],
+  });
+
+  const content = response.choices[0]?.message?.content;
+  if (!content) return [productName];
+
+  try {
+    const cleaned = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+    return Array.isArray(parsed) ? parsed : [productName];
+  } catch {
+    return [productName];
+  }
+}
+
 export async function identifyProduct(imageBase64: string): Promise<ProductIdentification> {
   const response = await openai.chat.completions.create({
     model: 'gpt-4o',

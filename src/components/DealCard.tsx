@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useCallback } from 'react';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { formatPrice } from '../utils/formatters';
@@ -22,11 +22,11 @@ interface DealCardProps {
 }
 
 function DealCard({ deal, onPress }: DealCardProps) {
+  const handlePress = useCallback(() => onPress(deal), [deal, onPress]);
   return (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => onPress(deal)}
-      activeOpacity={0.7}
+    <Pressable
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      onPress={handlePress}
     >
       <View style={styles.retailerIcon}>
         <Ionicons name="storefront" size={20} color={Colors.textSecondary} />
@@ -48,7 +48,7 @@ function DealCard({ deal, onPress }: DealCardProps) {
           </View>
         )}
       </View>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -60,6 +60,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     marginBottom: 10,
+  },
+  cardPressed: {
+    opacity: 0.7,
   },
   retailerIcon: {
     width: 24,

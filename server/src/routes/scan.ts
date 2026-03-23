@@ -1,8 +1,9 @@
 import { Router, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { AuthenticatedRequest } from '../middleware/auth';
+import { scanLimiter } from '../middleware/rateLimit';
 import prisma from '../lib/prisma';
-import { identifyProduct } from '../services/ai';
+import { identifyProduct, generateSearchQueries } from '../services/ai';
 import { searchDeals } from '../services/deals';
 import crypto from 'crypto';
 
@@ -34,7 +35,7 @@ async function uploadImage(base64: string, userId: string): Promise<string> {
 }
 
 // POST /api/scan — scan a product image
-router.post('/', async (req: AuthenticatedRequest, res: Response) => {
+router.post('/', scanLimiter, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { imageBase64 } = req.body;
     if (!imageBase64 || typeof imageBase64 !== 'string') {
@@ -141,6 +142,75 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   } catch (error) {
     console.error('Get scans error:', error);
     res.status(500).json({ error: 'Failed to fetch scans' });
+  }
+});
+
+// POST /api/scan/:id/retry — correct product name and re-search deals
+router.post('/:id/retry', scanLimiter, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const paramId = req.params.id as string;
+    const { correctedProductName } = req.body;
+
+    if (!correctedProductName || typeof correctedProductName !== 'string') {
+      res.status(400).json({ error: 'correctedProductName is required' });
+      return;
+    }
+    if (correctedProductName.length > 500) {
+      res.status(400).json({ error: 'Product name too long' });
+      return;
+    }
+
+    // Verify ownership
+    const existingScan = await prisma.scan.findFirst({
+      where: { id: paramId, userId: req.userId! },
+    });
+    if (!existingScan) {
+      res.status(404).json({ error: 'Scan not found' });
+      return;
+    }
+
+    // Generate new search queries from the corrected name
+    const searchQueries = await generateSearchQueries(correctedProductName, existingScan.category);
+
+    // Delete old deals
+    await prisma.deal.deleteMany({ where: { scanId: paramId } });
+
+    // Search for new deals
+    const estimatedPrice = existingScan.estimatedRetailPrice
+      ? Number(existingScan.estimatedRetailPrice)
+      : null;
+    const deals = await searchDeals(searchQueries, estimatedPrice);
+
+    // Update scan and create new deals
+    const updatedScan = await prisma.scan.update({
+      where: { id: paramId },
+      data: {
+        productName: correctedProductName,
+        aiConfidence: -1, // indicates user_corrected
+        searchQueries,
+        deals: {
+          create: deals.map((d) => ({
+            retailer: d.retailer,
+            retailerLogoUrl: d.retailerLogoUrl,
+            productTitle: d.productTitle,
+            price: d.price,
+            originalPrice: d.originalPrice,
+            currency: d.currency,
+            condition: d.condition,
+            productUrl: d.productUrl,
+            imageUrl: d.imageUrl,
+            savingsAmount: d.savingsAmount,
+            savingsPercent: d.savingsPercent,
+          })),
+        },
+      },
+      include: { deals: { orderBy: { price: 'asc' } } },
+    });
+
+    res.json(updatedScan);
+  } catch (error) {
+    console.error('Retry scan error:', error);
+    res.status(500).json({ error: 'Failed to retry scan' });
   }
 });
 
