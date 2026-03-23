@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String         @id @default(uuid()) @db.Uuid
+  email              String         @unique
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+  subscriptionStatus String         @default("free") @map("subscription_status")
+  totalScans         Int            @default(0) @map("total_scans")
+  totalSavings       Decimal        @default(0) @map("total_savings") @db.Decimal(10, 2)
+  totalClicks        Int            @default(0) @map("total_clicks")
+  scans              Scan[]
+  savedScans         SavedScan[]
+  clickTracking      ClickTracking[]
+
+  @@map("app_users")
+}
+
+model Scan {
+  id                   String         @id @default(uuid()) @db.Uuid
+  userId               String         @map("user_id") @db.Uuid
+  imageUrl             String         @map("image_url")
+  productName          String         @map("product_name")
+  brand                String?
+  model                String?
+  category             String
+  attributes           Json           @default("{}")
+  estimatedRetailPrice Decimal?       @map("estimated_retail_price") @db.Decimal(10, 2)
+  aiConfidence         Float          @map("ai_confidence")
+  searchQueries        String[]       @map("search_queries")
+  createdAt            DateTime       @default(now()) @map("created_at")
+  user                 User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deals                Deal[]
+  savedScans           SavedScan[]
+  clickTracking        ClickTracking[]
+
+  @@map("scans")
+}
+
+model Deal {
+  id              String         @id @default(uuid()) @db.Uuid
+  scanId          String         @map("scan_id") @db.Uuid
+  retailer        String
+  retailerLogoUrl String?        @map("retailer_logo_url")
+  productTitle    String         @map("product_title")
+  price           Decimal        @db.Decimal(10, 2)
+  originalPrice   Decimal?       @map("original_price") @db.Decimal(10, 2)
+  currency        String         @default("USD")
+  condition       String?
+  productUrl      String         @map("product_url")
+  imageUrl        String?        @map("image_url")
+  savingsAmount   Decimal?       @map("savings_amount") @db.Decimal(10, 2)
+  savingsPercent  Int?           @map("savings_percent")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  scan            Scan           @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  clickTracking   ClickTracking[]
+
+  @@map("deals")
+}
+
+model SavedScan {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  scanId    String   @map("scan_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scan      Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, scanId])
+  @@map("saved_scans")
+}
+
+model ClickTracking {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  scanId    String   @map("scan_id") @db.Uuid
+  dealId    String   @map("deal_id") @db.Uuid
+  retailer  String
+  price     Decimal  @db.Decimal(10, 2)
+  clickedAt DateTime @default(now()) @map("clicked_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scan      Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  deal      Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+
+  @@map("click_tracking")
+}

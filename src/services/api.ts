@@ -1,0 +1,109 @@
+import * as FileSystem from 'expo-file-system/legacy';
+import { supabase } from '../lib/supabase';
+import type { Scan, PaginatedScans, UserProfile, UserStats, SavedScanRecord, ClickRecord } from '../types/api';
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+
+// Callback set by AuthProvider so api layer can force sign-out without hooks
+let onForceSignOut: (() => void) | null = null;
+
+export function setForceSignOut(cb: () => void) {
+  onForceSignOut = cb;
+}
+
+async function getAuthToken(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
+async function rawFetch(path: string, token: string | null, options: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45000);
+
+  try {
+    return await fetch(`${API_URL}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
+    });
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error('Request timed out. Please check your connection and try again.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = await getAuthToken();
+  let res = await rawFetch(path, token, options);
+
+  // 401 interceptor: attempt a single token refresh then retry
+  if (res.status === 401) {
+    const { data, error } = await supabase.auth.refreshSession();
+
+    if (error || !data.session) {
+      // Refresh failed — force sign out so the user sees the auth screen
+      await supabase.auth.signOut().catch(() => {});
+      onForceSignOut?.();
+      throw new Error('Your session has expired. Please sign in again.');
+    }
+
+    // Retry the original request with the fresh token
+    res = await rawFetch(path, data.session.access_token, options);
+  }
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `API error: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export async function scanProduct(imageUri: string): Promise<Scan> {
+  const base64 = await FileSystem.readAsStringAsync(imageUri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  return apiFetch<Scan>('/api/scan', {
+    method: 'POST',
+    body: JSON.stringify({ imageBase64: base64 }),
+  });
+}
+
+export async function getScan(scanId: string): Promise<Scan> {
+  return apiFetch<Scan>(`/api/scan/${scanId}`);
+}
+
+export async function getScans(page: number = 1): Promise<PaginatedScans> {
+  return apiFetch<PaginatedScans>(`/api/scans?page=${page}&limit=20`);
+}
+
+export async function saveScan(scanId: string): Promise<SavedScanRecord> {
+  return apiFetch<SavedScanRecord>(`/api/scan/${scanId}/save`, { method: 'POST' });
+}
+
+export async function unsaveScan(scanId: string): Promise<{ success: boolean }> {
+  return apiFetch<{ success: boolean }>(`/api/scan/${scanId}/save`, { method: 'DELETE' });
+}
+
+export async function getUserProfile(): Promise<UserProfile> {
+  return apiFetch<UserProfile>('/api/user/profile');
+}
+
+export async function getUserStats(): Promise<UserStats> {
+  return apiFetch<UserStats>('/api/user/stats');
+}
+
+export async function trackClick(scanId: string, dealId: string, retailer: string, price: number): Promise<ClickRecord> {
+  return apiFetch<ClickRecord>('/api/track/click', {
+    method: 'POST',
+    body: JSON.stringify({ scanId, dealId, retailer, price }),
+  });
+}
