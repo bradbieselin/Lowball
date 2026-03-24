@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import { Colors } from '../constants/colors';
 import ScanCard, { ScanCardData } from '../components/ScanCard';
 import { useUserStats } from '../hooks/useUser';
 import { useSavedScans } from '../hooks/useScans';
+import { usePurchases } from '../hooks/usePurchases';
 import { useAuthContext } from '../contexts/AuthContext';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
@@ -25,14 +26,16 @@ interface MenuRowProps {
   label: string;
   rightText?: string;
   rightTextColor?: string;
+  rightElement?: React.ReactNode;
   onPress: () => void;
 }
 
-function MenuRow({ label, rightText, rightTextColor, onPress }: MenuRowProps) {
+function MenuRow({ label, rightText, rightTextColor, rightElement, onPress }: MenuRowProps) {
   return (
     <TouchableOpacity style={styles.menuRow} onPress={onPress} activeOpacity={0.6}>
       <Text style={styles.menuLabel}>{label}</Text>
       <View style={styles.menuRight}>
+        {rightElement}
         {rightText && (
           <Text style={[styles.menuRightText, rightTextColor ? { color: rightTextColor } : undefined]}>
             {rightText}
@@ -49,6 +52,8 @@ export default function ProfileScreen() {
   const { signOut } = useAuthContext();
   const { data: stats, isLoading: statsLoading } = useUserStats();
   const { data: savedScansRaw, isLoading: savedLoading } = useSavedScans();
+  const { isAdFree, loading: purchaseLoading, buyRemoveAds, restore } = usePurchases();
+  const [restoring, setRestoring] = useState(false);
 
   const savedScans: ScanCardData[] = (savedScansRaw ?? []).map((s: any) => ({
     id: s.scan?.id ?? s.scanId,
@@ -61,6 +66,33 @@ export default function ProfileScreen() {
   const handleScanCardPress = useCallback((scanId: string) => {
     navigation.navigate('Results', { scanId });
   }, [navigation]);
+
+  const handleRemoveAds = useCallback(async () => {
+    try {
+      const success = await buyRemoveAds();
+      if (success) {
+        Alert.alert('Ads Removed!', 'You now have an ad-free experience. Thank you for your support!');
+      }
+    } catch (err: any) {
+      Alert.alert('Purchase Failed', err.message || 'Something went wrong. Please try again.');
+    }
+  }, [buyRemoveAds]);
+
+  const handleRestore = useCallback(async () => {
+    setRestoring(true);
+    try {
+      const found = await restore();
+      if (found) {
+        Alert.alert('Purchases Restored!', 'Your ad-free access has been restored.');
+      } else {
+        Alert.alert('No Purchases Found', 'No previous purchases were found for this account.');
+      }
+    } catch (err: any) {
+      Alert.alert('Restore Failed', err.message || 'Something went wrong. Please try again.');
+    } finally {
+      setRestoring(false);
+    }
+  }, [restore]);
 
   const handleSignOut = async () => {
     try {
@@ -133,9 +165,28 @@ export default function ProfileScreen() {
         <View style={styles.menuGroup}>
           <MenuRow label="Update Email" onPress={() => {}} />
           <MenuRow label="Change Password" onPress={() => {}} />
-          <MenuRow label="Remove Ads" rightText="$2.99" rightTextColor={Colors.accent} onPress={() => {}} />
-          <MenuRow label="Restore Purchases" onPress={() => {}} />
+          {!isAdFree && (
+            <MenuRow
+              label="Remove Ads"
+              rightElement={purchaseLoading ? <ActivityIndicator color={Colors.accent} size="small" style={{ marginRight: 8 }} /> : undefined}
+              rightText={purchaseLoading ? undefined : '$2.99'}
+              rightTextColor={Colors.accent}
+              onPress={handleRemoveAds}
+            />
+          )}
+          <MenuRow
+            label="Restore Purchases"
+            rightElement={restoring ? <ActivityIndicator color={Colors.textSecondary} size="small" style={{ marginRight: 8 }} /> : undefined}
+            onPress={handleRestore}
+          />
         </View>
+
+        {isAdFree && (
+          <View style={styles.adFreeBadge}>
+            <Ionicons name="checkmark-circle" size={16} color={Colors.accent} />
+            <Text style={styles.adFreeText}>Ad-free — thank you for your support!</Text>
+          </View>
+        )}
 
         {/* About */}
         <Text style={styles.sectionHeader}>About</Text>
@@ -182,6 +233,11 @@ const styles = StyleSheet.create({
   menuLabel: { color: Colors.textPrimary, fontSize: 16 },
   menuRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   menuRightText: { color: Colors.textSecondary, fontSize: 14 },
+  adFreeBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingVertical: 8, paddingHorizontal: 4, marginBottom: 8,
+  },
+  adFreeText: { color: Colors.accent, fontSize: 13, fontWeight: '500' },
   dangerButton: { alignItems: 'center', paddingVertical: 14, marginTop: 8 },
   dangerText: { color: Colors.danger, fontSize: 16, fontWeight: '600' },
 });

@@ -1,5 +1,6 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { initializePurchases } from '../services/purchases';
 import type { User, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -16,6 +17,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const auth = useAuth();
+
+  // Initialize RevenueCat when user is authenticated
+  useEffect(() => {
+    if (auth.user?.id) {
+      initializePurchases(auth.user.id);
+    }
+  }, [auth.user?.id]);
+
   return <AuthContext.Provider value={auth}>{children}</AuthContext.Provider>;
 }
 

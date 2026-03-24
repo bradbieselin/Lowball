@@ -45,6 +45,25 @@ router.put('/profile', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// POST /api/user/sync-subscription
+router.post('/sync-subscription', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { status } = req.body;
+    if (!status || typeof status !== 'string' || !['free', 'pro'].includes(status)) {
+      res.status(400).json({ error: 'Invalid status. Must be "free" or "pro".' });
+      return;
+    }
+    const user = await prisma.user.update({
+      where: { id: req.userId! },
+      data: { subscriptionStatus: status },
+    });
+    res.json({ subscriptionStatus: user.subscriptionStatus });
+  } catch (error) {
+    console.error('Sync subscription error:', error);
+    res.status(500).json({ error: 'Failed to sync subscription' });
+  }
+});
+
 // GET /api/user/saved-scans
 router.get('/saved-scans', async (req: AuthenticatedRequest, res: Response) => {
   try {

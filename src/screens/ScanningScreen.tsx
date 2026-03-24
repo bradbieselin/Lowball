@@ -14,6 +14,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 import { useScanProduct } from '../hooks/useScans';
+import { useAds } from '../hooks/useAds';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
 type ScanningNav = NativeStackNavigationProp<RootStackParamList, 'Scanning'>;
@@ -36,6 +37,7 @@ export default function ScanningScreen() {
   const route = useRoute<ScanningRoute>();
   const { imageUri } = route.params;
   const scanMutation = useScanProduct();
+  const { shouldShowAds, loadAd, showAd, isAdLoaded } = useAds();
 
   const [messageIndex, setMessageIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -46,11 +48,15 @@ export default function ScanningScreen() {
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
+    // Preload ad if not already loaded
+    if (shouldShowAds && !isAdLoaded()) {
+      loadAd();
+    }
     return () => {
       isMounted.current = false;
       timers.current.forEach(clearTimeout);
     };
-  }, []);
+  }, [shouldShowAds, loadAd, isAdLoaded]);
 
   // Scanning line animation
   useEffect(() => {
@@ -76,16 +82,27 @@ export default function ScanningScreen() {
     return () => clearInterval(interval);
   }, [textOpacity]);
 
-  const navigateWithDelay = useCallback((scanId: string) => {
+  const navigateAfterAd = useCallback(async (scanId: string) => {
+    // Wait for minimum display time
     const elapsed = Date.now() - startTime.current;
     const remaining = Math.max(0, MIN_DISPLAY_MS - elapsed);
-    const timer = setTimeout(() => {
-      if (isMounted.current) {
-        navigation.replace('Results', { scanId });
-      }
-    }, remaining);
-    timers.current.push(timer);
-  }, [navigation]);
+
+    await new Promise((resolve) => {
+      const timer = setTimeout(resolve, remaining);
+      timers.current.push(timer);
+    });
+
+    if (!isMounted.current) return;
+
+    // Show ad if applicable, then navigate
+    if (shouldShowAds) {
+      await showAd(); // Resolves immediately if no ad loaded
+    }
+
+    if (isMounted.current) {
+      navigation.replace('Results', { scanId });
+    }
+  }, [navigation, shouldShowAds, showAd]);
 
   const doScan = useCallback(() => {
     setError(null);
@@ -93,7 +110,7 @@ export default function ScanningScreen() {
     scanMutation.mutate(imageUri, {
       onSuccess: (data) => {
         if (isMounted.current) {
-          navigateWithDelay(data.id);
+          navigateAfterAd(data.id);
         }
       },
       onError: (err) => {
@@ -102,7 +119,7 @@ export default function ScanningScreen() {
         }
       },
     });
-  }, [imageUri, scanMutation, navigateWithDelay]);
+  }, [imageUri, scanMutation, navigateAfterAd]);
 
   // Trigger scan mutation on mount
   useEffect(() => {

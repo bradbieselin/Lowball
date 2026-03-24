@@ -127,3 +127,10 @@ export async function trackClick(scanId: string, dealId: string, retailer: strin
     body: JSON.stringify({ scanId, dealId, retailer, price }),
   });
 }
+
+export async function syncSubscription(status: string): Promise<void> {
+  await apiFetch<void>('/api/user/sync-subscription', {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
+}

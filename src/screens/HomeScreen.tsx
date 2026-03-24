@@ -19,6 +19,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Colors } from '../constants/colors';
 import ScanCard, { ScanCardData } from '../components/ScanCard';
 import { useRecentScans } from '../hooks/useScans';
+import { useAds } from '../hooks/useAds';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
 type HomeNav = NativeStackNavigationProp<RootStackParamList, 'Home'>;
@@ -57,6 +58,12 @@ function HowItWorksBar() {
 export default function HomeScreen() {
   const navigation = useNavigation<HomeNav>();
   const { data, isLoading, refetch, isRefetching } = useRecentScans();
+  const { loadAd: preloadAd } = useAds();
+
+  // Preload an ad so it's ready when the user finishes scanning
+  useEffect(() => {
+    preloadAd();
+  }, [preloadAd]);
 
   // Animations
   const pulseAnim = useRef(new Animated.Value(0.4)).current;

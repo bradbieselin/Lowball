@@ -23,7 +23,9 @@
       "adaptiveIcon": {
         "backgroundColor": "#0D0D0D"
       },
-      "permissions": ["CAMERA"]
+      "permissions": [
+        "CAMERA"
+      ]
     },
     "plugins": [
       [
@@ -36,6 +38,13 @@
         "expo-image-picker",
         {
           "photosPermission": "Lowball needs photo library access to scan products from your photos."
+        }
+      ],
+      [
+        "react-native-google-mobile-ads",
+        {
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511",
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713"
         }
       ]
     ]
