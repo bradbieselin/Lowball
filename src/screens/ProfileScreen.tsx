@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Colors } from '../constants/colors';
+import { useTheme } from '../contexts/ThemeContext';
 import ScanCard, { ScanCardData } from '../components/ScanCard';
 import { useUserStats } from '../hooks/useUser';
 import { useSavedScans } from '../hooks/useScans';
@@ -28,20 +28,25 @@ interface MenuRowProps {
   rightTextColor?: string;
   rightElement?: React.ReactNode;
   onPress: () => void;
+  colors: ReturnType<typeof useTheme>['colors'];
 }
 
-function MenuRow({ label, rightText, rightTextColor, rightElement, onPress }: MenuRowProps) {
+function MenuRow({ label, rightText, rightTextColor, rightElement, onPress, colors }: MenuRowProps) {
   return (
-    <TouchableOpacity style={styles.menuRow} onPress={onPress} activeOpacity={0.6}>
-      <Text style={styles.menuLabel}>{label}</Text>
+    <TouchableOpacity
+      style={[styles.menuRow, { borderBottomColor: colors.border }]}
+      onPress={onPress}
+      activeOpacity={0.6}
+    >
+      <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>{label}</Text>
       <View style={styles.menuRight}>
         {rightElement}
         {rightText && (
-          <Text style={[styles.menuRightText, rightTextColor ? { color: rightTextColor } : undefined]}>
+          <Text style={[styles.menuRightText, { color: colors.textSecondary }, rightTextColor ? { color: rightTextColor } : undefined]}>
             {rightText}
           </Text>
         )}
-        <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       </View>
     </TouchableOpacity>
   );
@@ -50,6 +55,7 @@ function MenuRow({ label, rightText, rightTextColor, rightElement, onPress }: Me
 export default function ProfileScreen() {
   const navigation = useNavigation<ProfileNav>();
   const { signOut } = useAuthContext();
+  const { colors, mode, setMode, isDark } = useTheme();
   const { data: stats, isLoading: statsLoading } = useUserStats();
   const { data: savedScansRaw, isLoading: savedLoading } = useSavedScans();
   const { isAdFree, loading: purchaseLoading, buyRemoveAds, restore } = usePurchases();
@@ -111,32 +117,32 @@ export default function ProfileScreen() {
   const totalSavings = stats?.totalSavings ? parseFloat(stats.totalSavings).toFixed(2) : '0.00';
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Profile</Text>
         <View style={{ width: 24 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
         {/* Savings Stats Card */}
-        <View style={styles.statsCard}>
+        <View style={[styles.statsCard, { backgroundColor: colors.surface }]}>
           {statsLoading ? (
-            <ActivityIndicator color={Colors.accent} />
+            <ActivityIndicator color={colors.accent} />
           ) : (
             <>
-              <Text style={styles.statsLabel}>Total Saved</Text>
-              <Text style={styles.statsBig}>${totalSavings}</Text>
+              <Text style={[styles.statsLabel, { color: colors.textSecondary }]}>Total Saved</Text>
+              <Text style={[styles.statsBig, { color: colors.accent }]}>${totalSavings}</Text>
               <View style={styles.statsRow}>
                 <View>
-                  <Text style={styles.statsLabel}>Scans</Text>
-                  <Text style={styles.statNumber}>{stats?.totalScans ?? 0}</Text>
+                  <Text style={[styles.statsLabel, { color: colors.textSecondary }]}>Scans</Text>
+                  <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats?.totalScans ?? 0}</Text>
                 </View>
                 <View>
-                  <Text style={styles.statsLabel}>Deals Found</Text>
-                  <Text style={styles.statNumber}>{stats?.dealsFound ?? 0}</Text>
+                  <Text style={[styles.statsLabel, { color: colors.textSecondary }]}>Deals Found</Text>
+                  <Text style={[styles.statNumber, { color: colors.textPrimary }]}>{stats?.dealsFound ?? 0}</Text>
                 </View>
               </View>
             </>
@@ -144,61 +150,109 @@ export default function ProfileScreen() {
         </View>
 
         {/* Saved Deals */}
-        <Text style={styles.sectionHeader}>
+        <Text style={[styles.sectionHeader, { color: colors.textPrimary }]}>
           Saved Deals{savedScans.length > 0 ? ` (${savedScans.length})` : ''}
         </Text>
         {savedLoading ? (
-          <ActivityIndicator color={Colors.accent} style={{ marginVertical: 16 }} />
+          <ActivityIndicator color={colors.accent} style={{ marginVertical: 16 }} />
         ) : savedScans.length === 0 ? (
-          <Text style={styles.emptyText}>No saved deals yet. Start scanning!</Text>
+          <Text style={[styles.emptyText, { color: colors.textMuted }]}>No saved deals yet. Start scanning!</Text>
         ) : (
           savedScans.map((scan) => (
             <ScanCard key={scan.id} scan={scan} onPress={handleScanCardPress} />
           ))
         )}
 
+        {/* Appearance */}
+        <Text style={[styles.sectionHeader, { color: colors.textPrimary }]}>Appearance</Text>
+        <View style={[styles.menuGroup, { backgroundColor: colors.surface }]}>
+          <View style={[styles.themeRow, { borderBottomColor: colors.border }]}>
+            <Text style={[styles.menuLabel, { color: colors.textPrimary }]}>Theme</Text>
+            <View style={[styles.themeSwitcher, { backgroundColor: colors.surfaceLight }]}>
+              <TouchableOpacity
+                style={[
+                  styles.themeOption,
+                  isDark && { backgroundColor: colors.accent },
+                ]}
+                onPress={() => setMode('dark')}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="moon"
+                  size={14}
+                  color={isDark ? colors.accentOnDark : colors.textSecondary}
+                />
+                <Text style={[
+                  styles.themeOptionText,
+                  { color: isDark ? colors.accentOnDark : colors.textSecondary },
+                ]}>Dark</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.themeOption,
+                  !isDark && { backgroundColor: colors.accent },
+                ]}
+                onPress={() => setMode('light')}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name="sunny"
+                  size={14}
+                  color={!isDark ? colors.accentOnDark : colors.textSecondary}
+                />
+                <Text style={[
+                  styles.themeOptionText,
+                  { color: !isDark ? colors.accentOnDark : colors.textSecondary },
+                ]}>Light</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
         {/* Account */}
-        <Text style={styles.sectionHeader}>Account</Text>
-        <View style={styles.menuGroup}>
-          <MenuRow label="Update Email" onPress={() => {}} />
-          <MenuRow label="Change Password" onPress={() => {}} />
+        <Text style={[styles.sectionHeader, { color: colors.textPrimary }]}>Account</Text>
+        <View style={[styles.menuGroup, { backgroundColor: colors.surface }]}>
+          <MenuRow label="Update Email" onPress={() => {}} colors={colors} />
+          <MenuRow label="Change Password" onPress={() => {}} colors={colors} />
           {!isAdFree && (
             <MenuRow
               label="Remove Ads"
-              rightElement={purchaseLoading ? <ActivityIndicator color={Colors.accent} size="small" style={{ marginRight: 8 }} /> : undefined}
+              rightElement={purchaseLoading ? <ActivityIndicator color={colors.accent} size="small" style={{ marginRight: 8 }} /> : undefined}
               rightText={purchaseLoading ? undefined : '$2.99'}
-              rightTextColor={Colors.accent}
+              rightTextColor={colors.accent}
               onPress={handleRemoveAds}
+              colors={colors}
             />
           )}
           <MenuRow
             label="Restore Purchases"
-            rightElement={restoring ? <ActivityIndicator color={Colors.textSecondary} size="small" style={{ marginRight: 8 }} /> : undefined}
+            rightElement={restoring ? <ActivityIndicator color={colors.textSecondary} size="small" style={{ marginRight: 8 }} /> : undefined}
             onPress={handleRestore}
+            colors={colors}
           />
         </View>
 
         {isAdFree && (
           <View style={styles.adFreeBadge}>
-            <Ionicons name="checkmark-circle" size={16} color={Colors.accent} />
-            <Text style={styles.adFreeText}>Ad-free — thank you for your support!</Text>
+            <Ionicons name="checkmark-circle" size={16} color={colors.accent} />
+            <Text style={[styles.adFreeText, { color: colors.accent }]}>Ad-free — thank you for your support!</Text>
           </View>
         )}
 
         {/* About */}
-        <Text style={styles.sectionHeader}>About</Text>
-        <View style={styles.menuGroup}>
-          <MenuRow label="Rate Lowball" onPress={() => {}} />
-          <MenuRow label="Privacy Policy" onPress={() => {}} />
-          <MenuRow label="Terms of Service" onPress={() => {}} />
-          <MenuRow label="Contact Us" onPress={() => {}} />
+        <Text style={[styles.sectionHeader, { color: colors.textPrimary }]}>About</Text>
+        <View style={[styles.menuGroup, { backgroundColor: colors.surface }]}>
+          <MenuRow label="Rate Lowball" onPress={() => {}} colors={colors} />
+          <MenuRow label="Privacy Policy" onPress={() => {}} colors={colors} />
+          <MenuRow label="Terms of Service" onPress={() => {}} colors={colors} />
+          <MenuRow label="Contact Us" onPress={() => {}} colors={colors} />
         </View>
 
         <TouchableOpacity style={styles.dangerButton} onPress={handleSignOut}>
-          <Text style={styles.dangerText}>Sign Out</Text>
+          <Text style={[styles.dangerText, { color: colors.danger }]}>Sign Out</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.dangerButton} onPress={handleDeleteAccount}>
-          <Text style={styles.dangerText}>Delete Account</Text>
+          <Text style={[styles.dangerText, { color: colors.danger }]}>Delete Account</Text>
         </TouchableOpacity>
 
         <View style={{ height: 40 }} />
@@ -208,33 +262,45 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: 16, paddingVertical: 12,
   },
-  headerTitle: { color: Colors.textPrimary, fontSize: 22, fontWeight: '600' },
+  headerTitle: { fontSize: 22, fontWeight: '600' },
   scroll: { paddingHorizontal: 16 },
-  statsCard: { backgroundColor: Colors.surface, borderRadius: 16, padding: 20, marginBottom: 24 },
-  statsLabel: { color: Colors.textSecondary, fontSize: 13 },
-  statsBig: { color: Colors.accent, fontSize: 28, fontWeight: '700', marginTop: 4, marginBottom: 16 },
+  statsCard: { borderRadius: 16, padding: 20, marginBottom: 24 },
+  statsLabel: { fontSize: 13 },
+  statsBig: { fontSize: 28, fontWeight: '700', marginTop: 4, marginBottom: 16 },
   statsRow: { flexDirection: 'row', gap: 32 },
-  statNumber: { color: Colors.textPrimary, fontSize: 18, fontWeight: '600', marginTop: 4 },
-  sectionHeader: { color: Colors.textPrimary, fontSize: 18, fontWeight: '600', marginBottom: 12, marginTop: 8 },
-  emptyText: { color: Colors.textMuted, fontSize: 14, textAlign: 'center', marginVertical: 16 },
-  menuGroup: { backgroundColor: Colors.surface, borderRadius: 12, marginBottom: 16, overflow: 'hidden' },
+  statNumber: { fontSize: 18, fontWeight: '600', marginTop: 4 },
+  sectionHeader: { fontSize: 18, fontWeight: '600', marginBottom: 12, marginTop: 8 },
+  emptyText: { fontSize: 14, textAlign: 'center', marginVertical: 16 },
+  menuGroup: { borderRadius: 12, marginBottom: 16, overflow: 'hidden' },
   menuRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.border,
+    paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1,
   },
-  menuLabel: { color: Colors.textPrimary, fontSize: 16 },
+  menuLabel: { fontSize: 16 },
   menuRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  menuRightText: { color: Colors.textSecondary, fontSize: 14 },
+  menuRightText: { fontSize: 14 },
   adFreeBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingVertical: 8, paddingHorizontal: 4, marginBottom: 8,
   },
-  adFreeText: { color: Colors.accent, fontSize: 13, fontWeight: '500' },
+  adFreeText: { fontSize: 13, fontWeight: '500' },
   dangerButton: { alignItems: 'center', paddingVertical: 14, marginTop: 8 },
-  dangerText: { color: Colors.danger, fontSize: 16, fontWeight: '600' },
+  dangerText: { fontSize: 16, fontWeight: '600' },
+  themeRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1,
+  },
+  themeSwitcher: {
+    flexDirection: 'row', borderRadius: 8, padding: 2,
+  },
+  themeOption: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6,
+  },
+  themeOptionText: { fontSize: 13, fontWeight: '600' },
 });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,22 +13,32 @@ import {
   TouchableWithoutFeedback,
   Alert,
 } from 'react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Colors } from '../../constants/colors';
+import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthContext } from '../../contexts/AuthContext';
 import type { AuthStackParamList } from '../../navigation/AuthStack';
 
 type SignUpNav = NativeStackNavigationProp<AuthStackParamList, 'SignUp'>;
 
 export default function SignUpScreen() {
+  const { colors } = useTheme();
   const navigation = useNavigation<SignUpNav>();
-  const { signUp } = useAuthContext();
+  const { signUp, signInWithApple } = useAuthContext();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (Platform.OS === 'ios') {
+      AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
+    }
+  }, []);
 
   const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const [successMessage, setSuccessMessage] = useState('');
@@ -73,20 +83,20 @@ export default function SignUpScreen() {
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.title}>Create account</Text>
-        <Text style={styles.subtitle}>Start saving money today</Text>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>Create account</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Start saving money today</Text>
 
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: colors.surfaceLight, color: colors.textPrimary }]}
           placeholder="Email"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
@@ -95,49 +105,69 @@ export default function SignUpScreen() {
         />
 
         <TextInput
-          style={[styles.input, passwordError ? styles.inputError : null]}
+          style={[styles.input, { backgroundColor: colors.surfaceLight, color: colors.textPrimary }, passwordError ? [styles.inputError, { borderColor: colors.danger }] : null]}
           placeholder="Password (min 8 characters)"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={password}
           onChangeText={handlePasswordChange}
           secureTextEntry
         />
         {passwordError ? (
-          <Text style={styles.errorText}>{passwordError}</Text>
+          <Text style={[styles.errorText, { color: colors.danger }]}>{passwordError}</Text>
         ) : null}
 
-        {error ? <Text style={styles.authError}>{error}</Text> : null}
-        {successMessage ? <Text style={styles.successText}>{successMessage}</Text> : null}
+        {error ? <Text style={[styles.authError, { color: colors.danger }]}>{error}</Text> : null}
+        {successMessage ? <Text style={[styles.successText, { color: colors.accent }]}>{successMessage}</Text> : null}
 
-        <TouchableOpacity style={styles.primaryButton} onPress={handleSignUp} disabled={loading}>
+        <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.accent }]} onPress={handleSignUp} disabled={loading}>
           {loading ? (
-            <ActivityIndicator color="#000000" />
+            <ActivityIndicator color={colors.accentOnDark} />
           ) : (
-            <Text style={styles.primaryButtonText}>Sign Up</Text>
+            <Text style={[styles.primaryButtonText, { color: colors.accentOnDark }]}>Sign Up</Text>
           )}
         </TouchableOpacity>
 
         <View style={styles.dividerContainer}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or</Text>
-          <View style={styles.dividerLine} />
+          <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+          <Text style={[styles.dividerText, { color: colors.textMuted }]}>or</Text>
+          <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
         </View>
 
-        <TouchableOpacity style={styles.socialButton} onPress={() => Alert.alert('Coming Soon', 'Social login will be available in a future update.')}>
-          <Text style={styles.socialButtonText}>Continue with Google</Text>
+        <TouchableOpacity style={[styles.socialButton, { borderColor: colors.textPrimary }]} onPress={() => Alert.alert('Coming Soon', 'Social login will be available in a future update.')}>
+          <Text style={[styles.socialButtonText, { color: colors.textPrimary }]}>Continue with Google</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.socialButton} onPress={() => Alert.alert('Coming Soon', 'Social login will be available in a future update.')}>
-          <Text style={styles.socialButtonText}>Continue with Apple</Text>
-        </TouchableOpacity>
+        {appleAvailable && (
+          <TouchableOpacity
+            style={styles.appleButton}
+            onPress={async () => {
+              setAppleLoading(true);
+              setError('');
+              try {
+                await signInWithApple();
+              } catch (err: any) {
+                setError(err.message || 'Apple Sign-In failed');
+              } finally {
+                setAppleLoading(false);
+              }
+            }}
+            disabled={appleLoading}
+          >
+            {appleLoading ? (
+              <ActivityIndicator color={colors.accentOnDark} />
+            ) : (
+              <Text style={[styles.appleButtonText, { color: colors.accentOnDark }]}> Continue with Apple</Text>
+            )}
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity
           style={styles.linkContainer}
           onPress={() => navigation.navigate('SignIn')}
         >
-          <Text style={styles.linkText}>
+          <Text style={[styles.linkText, { color: colors.textSecondary }]}>
             Already have an account?{' '}
-            <Text style={styles.linkAccent}>Sign In</Text>
+            <Text style={[styles.linkAccent, { color: colors.accent }]}>Sign In</Text>
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -149,7 +179,6 @@ export default function SignUpScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   scroll: {
     flexGrow: 1,
@@ -158,19 +187,15 @@ const styles = StyleSheet.create({
     paddingVertical: 48,
   },
   title: {
-    color: Colors.textPrimary,
     fontSize: 28,
     fontWeight: '700',
     marginBottom: 8,
   },
   subtitle: {
-    color: Colors.textSecondary,
     fontSize: 16,
     marginBottom: 32,
   },
   input: {
-    backgroundColor: Colors.surfaceLight,
-    color: Colors.textPrimary,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -179,29 +204,24 @@ const styles = StyleSheet.create({
   },
   inputError: {
     borderWidth: 1,
-    borderColor: Colors.danger,
     marginBottom: 4,
   },
   errorText: {
-    color: Colors.danger,
     fontSize: 13,
     marginBottom: 16,
     marginLeft: 4,
   },
   authError: {
-    color: Colors.danger,
     fontSize: 13,
     marginBottom: 12,
     textAlign: 'center',
   },
   successText: {
-    color: Colors.accent,
     fontSize: 13,
     marginBottom: 12,
     textAlign: 'center',
   },
   primaryButton: {
-    backgroundColor: Colors.accent,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
@@ -209,7 +229,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   primaryButtonText: {
-    color: '#000000',
     fontSize: 16,
     fontWeight: '700',
   },
@@ -221,23 +240,30 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: Colors.border,
   },
   dividerText: {
-    color: Colors.textMuted,
     fontSize: 14,
     marginHorizontal: 16,
   },
   socialButton: {
     borderWidth: 1,
-    borderColor: Colors.textPrimary,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
     marginBottom: 12,
   },
   socialButtonText: {
-    color: Colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  appleButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  appleButtonText: {
     fontSize: 16,
     fontWeight: '600',
   },
@@ -246,11 +272,9 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   linkText: {
-    color: Colors.textSecondary,
     fontSize: 14,
   },
   linkAccent: {
-    color: Colors.accent,
     fontWeight: '600',
   },
 });

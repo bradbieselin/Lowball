@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,21 +13,31 @@ import {
   TouchableWithoutFeedback,
   Alert,
 } from 'react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Colors } from '../../constants/colors';
+import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthContext } from '../../contexts/AuthContext';
 import type { AuthStackParamList } from '../../navigation/AuthStack';
 
 type SignInNav = NativeStackNavigationProp<AuthStackParamList, 'SignIn'>;
 
 export default function SignInScreen() {
+  const { colors } = useTheme();
   const navigation = useNavigation<SignInNav>();
-  const { signIn } = useAuthContext();
+  const { signIn, signInWithApple } = useAuthContext();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (Platform.OS === 'ios') {
+      AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
+    }
+  }, []);
 
   const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -51,20 +61,20 @@ export default function SignInScreen() {
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.title}>Welcome back</Text>
-        <Text style={styles.subtitle}>Sign in to your account</Text>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>Welcome back</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Sign in to your account</Text>
 
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: colors.surfaceLight, color: colors.textPrimary }]}
           placeholder="Email"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
@@ -73,9 +83,9 @@ export default function SignInScreen() {
         />
 
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: colors.surfaceLight, color: colors.textPrimary }]}
           placeholder="Password"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={password}
           onChangeText={setPassword}
           secureTextEntry
@@ -85,40 +95,60 @@ export default function SignInScreen() {
           onPress={() => navigation.navigate('ForgotPassword')}
           style={styles.forgotContainer}
         >
-          <Text style={styles.forgotText}>Forgot Password?</Text>
+          <Text style={[styles.forgotText, { color: colors.textSecondary }]}>Forgot Password?</Text>
         </TouchableOpacity>
 
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {error ? <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text> : null}
 
-        <TouchableOpacity style={styles.primaryButton} onPress={handleSignIn} disabled={loading}>
+        <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.accent }]} onPress={handleSignIn} disabled={loading}>
           {loading ? (
-            <ActivityIndicator color="#000000" />
+            <ActivityIndicator color={colors.accentOnDark} />
           ) : (
-            <Text style={styles.primaryButtonText}>Sign In</Text>
+            <Text style={[styles.primaryButtonText, { color: colors.accentOnDark }]}>Sign In</Text>
           )}
         </TouchableOpacity>
 
         <View style={styles.dividerContainer}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or</Text>
-          <View style={styles.dividerLine} />
+          <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+          <Text style={[styles.dividerText, { color: colors.textMuted }]}>or</Text>
+          <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
         </View>
 
-        <TouchableOpacity style={styles.socialButton} onPress={() => Alert.alert('Coming Soon', 'Social login will be available in a future update.')}>
-          <Text style={styles.socialButtonText}>Continue with Google</Text>
+        <TouchableOpacity style={[styles.socialButton, { borderColor: colors.textPrimary }]} onPress={() => Alert.alert('Coming Soon', 'Social login will be available in a future update.')}>
+          <Text style={[styles.socialButtonText, { color: colors.textPrimary }]}>Continue with Google</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.socialButton} onPress={() => Alert.alert('Coming Soon', 'Social login will be available in a future update.')}>
-          <Text style={styles.socialButtonText}>Continue with Apple</Text>
-        </TouchableOpacity>
+        {appleAvailable && (
+          <TouchableOpacity
+            style={styles.appleButton}
+            onPress={async () => {
+              setAppleLoading(true);
+              setError('');
+              try {
+                await signInWithApple();
+              } catch (err: any) {
+                setError(err.message || 'Apple Sign-In failed');
+              } finally {
+                setAppleLoading(false);
+              }
+            }}
+            disabled={appleLoading}
+          >
+            {appleLoading ? (
+              <ActivityIndicator color={colors.accentOnDark} />
+            ) : (
+              <Text style={[styles.appleButtonText, { color: colors.accentOnDark }]}> Continue with Apple</Text>
+            )}
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity
           style={styles.linkContainer}
           onPress={() => navigation.navigate('SignUp')}
         >
-          <Text style={styles.linkText}>
+          <Text style={[styles.linkText, { color: colors.textSecondary }]}>
             Don't have an account?{' '}
-            <Text style={styles.linkAccent}>Sign Up</Text>
+            <Text style={[styles.linkAccent, { color: colors.accent }]}>Sign Up</Text>
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -130,7 +160,6 @@ export default function SignInScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   scroll: {
     flexGrow: 1,
@@ -139,19 +168,15 @@ const styles = StyleSheet.create({
     paddingVertical: 48,
   },
   title: {
-    color: Colors.textPrimary,
     fontSize: 28,
     fontWeight: '700',
     marginBottom: 8,
   },
   subtitle: {
-    color: Colors.textSecondary,
     fontSize: 16,
     marginBottom: 32,
   },
   input: {
-    backgroundColor: Colors.surfaceLight,
-    color: Colors.textPrimary,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -159,7 +184,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   errorText: {
-    color: Colors.danger,
     fontSize: 13,
     marginBottom: 12,
     textAlign: 'center',
@@ -169,18 +193,15 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   forgotText: {
-    color: Colors.textSecondary,
     fontSize: 14,
   },
   primaryButton: {
-    backgroundColor: Colors.accent,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
     marginBottom: 24,
   },
   primaryButtonText: {
-    color: '#000000',
     fontSize: 16,
     fontWeight: '700',
   },
@@ -192,23 +213,30 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: Colors.border,
   },
   dividerText: {
-    color: Colors.textMuted,
     fontSize: 14,
     marginHorizontal: 16,
   },
   socialButton: {
     borderWidth: 1,
-    borderColor: Colors.textPrimary,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
     marginBottom: 12,
   },
   socialButtonText: {
-    color: Colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  appleButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  appleButtonText: {
     fontSize: 16,
     fontWeight: '600',
   },
@@ -217,11 +245,9 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   linkText: {
-    color: Colors.textSecondary,
     fontSize: 14,
   },
   linkAccent: {
-    color: Colors.accent,
     fontWeight: '600',
   },
 });

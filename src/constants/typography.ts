@@ -1,7 +1,8 @@
+// Use system font (SF Pro on iOS, Roboto on Android) for Apple-native feel
 export const FontFamily = {
-  bold: 'Inter_700Bold',
-  semiBold: 'Inter_600SemiBold',
-  regular: 'Inter_400Regular',
+  bold: 'System',
+  semiBold: 'System',
+  regular: 'System',
 } as const;
 
 export const FontSize = {

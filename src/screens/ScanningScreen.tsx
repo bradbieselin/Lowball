@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
-import { Colors } from '../constants/colors';
+import { useTheme } from '../contexts/ThemeContext';
 import { useScanProduct } from '../hooks/useScans';
 import { useAds } from '../hooks/useAds';
 import type { RootStackParamList } from '../navigation/RootNavigator';
@@ -33,6 +33,7 @@ const IMAGE_SIZE = 200;
 const MIN_DISPLAY_MS = 3000;
 
 export default function ScanningScreen() {
+  const { colors } = useTheme();
   const navigation = useNavigation<ScanningNav>();
   const route = useRoute<ScanningRoute>();
   const { imageUri } = route.params;
@@ -134,15 +135,15 @@ export default function ScanningScreen() {
 
   if (error) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.content}>
-          <Ionicons name="alert-circle-outline" size={64} color={Colors.danger} />
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={doScan}>
-            <Text style={styles.retryText}>Retry</Text>
+          <Ionicons name="alert-circle-outline" size={64} color={colors.danger} />
+          <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
+          <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.accent }]} onPress={doScan}>
+            <Text style={[styles.retryText, { color: colors.accentOnDark }]}>Retry</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.homeButton} onPress={() => navigation.navigate('Home')}>
-            <Text style={styles.homeText}>Back to Home</Text>
+            <Text style={[styles.homeText, { color: colors.textSecondary }]}>Back to Home</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -150,19 +151,19 @@ export default function ScanningScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <TouchableOpacity style={styles.backButton} onPress={() => navigation.navigate('Home')}>
-        <Ionicons name="arrow-back" size={28} color={Colors.textPrimary} />
+        <Ionicons name="arrow-back" size={28} color={colors.textPrimary} />
       </TouchableOpacity>
 
       <View style={styles.content}>
         <View style={styles.imageContainer}>
           <Image source={{ uri: imageUri }} style={styles.productImage} />
           <Animated.View
-            style={[styles.scanLine, { transform: [{ translateY: scanLineTranslateY }] }]}
+            style={[styles.scanLine, { transform: [{ translateY: scanLineTranslateY }], backgroundColor: colors.accent, shadowColor: colors.accent }]}
           />
         </View>
-        <Animated.Text style={[styles.statusText, { opacity: textOpacity }]}>
+        <Animated.Text style={[styles.statusText, { opacity: textOpacity, color: colors.textSecondary }]}>
           {STATUS_MESSAGES[messageIndex]}
         </Animated.Text>
       </View>
@@ -171,19 +172,19 @@ export default function ScanningScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
   backButton: { position: 'absolute', top: 60, left: 20, zIndex: 1, padding: 8 },
   content: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   imageContainer: { width: IMAGE_SIZE, height: IMAGE_SIZE, borderRadius: 12, overflow: 'hidden', marginBottom: 40 },
   productImage: { width: IMAGE_SIZE, height: IMAGE_SIZE, borderRadius: 12 },
   scanLine: {
-    position: 'absolute', left: 0, right: 0, height: 3, backgroundColor: Colors.accent,
-    shadowColor: Colors.accent, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 8,
+    position: 'absolute', left: 0, right: 0, height: 3,
+    shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 8,
   },
-  statusText: { color: Colors.textSecondary, fontSize: 16, textAlign: 'center' },
-  errorText: { color: Colors.danger, fontSize: 16, textAlign: 'center', marginTop: 16, marginBottom: 24, paddingHorizontal: 32 },
-  retryButton: { backgroundColor: Colors.accent, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32, marginBottom: 12 },
-  retryText: { color: '#000000', fontSize: 16, fontWeight: '700' },
+  statusText: { fontSize: 16, textAlign: 'center' },
+  errorText: { fontSize: 16, textAlign: 'center', marginTop: 16, marginBottom: 24, paddingHorizontal: 32 },
+  retryButton: { borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32, marginBottom: 12 },
+  retryText: { fontSize: 16, fontWeight: '700' },
   homeButton: { paddingVertical: 14 },
-  homeText: { color: Colors.textSecondary, fontSize: 16 },
+  homeText: { fontSize: 16 },
 });

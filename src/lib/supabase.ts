@@ -1,3 +1,9 @@
+// Apple Sign-In requires configuration in the Supabase dashboard:
+// Authentication > Providers > Apple — enable the Apple provider and add:
+//   - iOS bundle ID: com.bradbieselin.lowball
+//   - Apple Services ID (from Apple Developer portal)
+// See: https://supabase.com/docs/guides/auth/social-login/auth-apple
+
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 

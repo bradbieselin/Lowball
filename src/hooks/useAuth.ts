@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { Platform } from 'react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { supabase } from '../lib/supabase';
 import { setForceSignOut } from '../services/api';
 import type { User, Session } from '@supabase/supabase-js';
@@ -68,5 +70,36 @@ export function useAuth() {
     if (error) throw error;
   };
 
-  return { user, session, loading, signIn, signUp, signOut, resetPassword };
+  const signInWithApple = async () => {
+    if (Platform.OS !== 'ios') {
+      throw new Error('Apple Sign-In is only available on iOS.');
+    }
+
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      if (!credential.identityToken) {
+        throw new Error('No identity token returned from Apple.');
+      }
+
+      const { error } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: credential.identityToken,
+      });
+
+      if (error) throw error;
+      // onAuthStateChange listener picks up the new session automatically
+    } catch (err: any) {
+      // User cancelled — do nothing
+      if (err.code === 'ERR_REQUEST_CANCELED') return;
+      throw new Error(err.message || 'Apple Sign-In failed. Please try again.');
+    }
+  };
+
+  return { user, session, loading, signIn, signUp, signOut, resetPassword, signInWithApple };
 }

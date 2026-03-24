@@ -15,7 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Colors } from '../constants/colors';
+import { useTheme } from '../contexts/ThemeContext';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
 type CameraNav = NativeStackNavigationProp<RootStackParamList, 'Camera'>;
@@ -28,6 +28,7 @@ const FLASH_ICONS: Partial<Record<FlashMode, string>> = {
 };
 
 export default function CameraScreen() {
+  const { colors } = useTheme();
   const navigation = useNavigation<CameraNav>();
   const [permission, requestPermission] = useCameraPermissions();
   const [flashMode, setFlashMode] = useState<FlashMode>('auto');
@@ -101,27 +102,27 @@ export default function CameraScreen() {
   };
 
   if (!permission) {
-    return <View style={styles.container} />;
+    return <View style={[styles.container, { backgroundColor: colors.background }]} />;
   }
 
   if (!permission.granted) {
     return (
-      <View style={styles.permissionContainer}>
-        <Ionicons name="camera-outline" size={64} color={Colors.textSecondary} />
-        <Text style={styles.permissionTitle}>Camera Access Needed</Text>
-        <Text style={styles.permissionText}>
+      <View style={[styles.permissionContainer, { backgroundColor: colors.background }]}>
+        <Ionicons name="camera-outline" size={64} color={colors.textSecondary} />
+        <Text style={[styles.permissionTitle, { color: colors.textPrimary }]}>Camera Access Needed</Text>
+        <Text style={[styles.permissionText, { color: colors.textSecondary }]}>
           Lowball needs camera access to scan products
         </Text>
         {permission.canAskAgain ? (
-          <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-            <Text style={styles.permissionButtonText}>Grant Access</Text>
+          <TouchableOpacity style={[styles.permissionButton, { backgroundColor: colors.accent }]} onPress={requestPermission}>
+            <Text style={[styles.permissionButtonText, { color: colors.accentOnDark }]}>Grant Access</Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={styles.permissionButton}
+            style={[styles.permissionButton, { backgroundColor: colors.accent }]}
             onPress={() => Linking.openSettings()}
           >
-            <Text style={styles.permissionButtonText}>Open Settings</Text>
+            <Text style={[styles.permissionButtonText, { color: colors.accentOnDark }]}>Open Settings</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -129,7 +130,7 @@ export default function CameraScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <CameraView
         ref={cameraRef}
         style={styles.camera}
@@ -150,7 +151,7 @@ export default function CameraScreen() {
           onPress={() => navigation.goBack()}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Ionicons name="arrow-back" size={28} color="#FFFFFF" />
+          <Ionicons name="arrow-back" size={28} color={colors.textPrimary} />
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.topButton}
@@ -160,10 +161,10 @@ export default function CameraScreen() {
           <Ionicons
             name={FLASH_ICONS[flashMode] as any}
             size={24}
-            color="#FFFFFF"
+            color={colors.textPrimary}
           />
           {flashMode === 'auto' && (
-            <Text style={styles.flashLabel}>A</Text>
+            <Text style={[styles.flashLabel, { color: colors.textPrimary }]}>A</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -171,17 +172,17 @@ export default function CameraScreen() {
       {/* Bottom bar — outside CameraView */}
       <View style={styles.bottomBar}>
         <TouchableOpacity style={styles.galleryButton} onPress={handlePickImage}>
-          <Ionicons name="images" size={28} color="#FFFFFF" />
+          <Ionicons name="images" size={28} color={colors.textPrimary} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.shutterOuter} onPress={handleCapture}>
-          <View style={styles.shutterInner} />
+        <TouchableOpacity style={[styles.shutterOuter, { backgroundColor: colors.textPrimary }]} onPress={handleCapture}>
+          <View style={[styles.shutterInner, { backgroundColor: colors.textPrimary, borderColor: colors.background }]} />
         </TouchableOpacity>
         <View style={styles.galleryButton} />
       </View>
 
       {/* Flash overlay */}
       <Animated.View
-        style={[styles.flashOverlay, { opacity: flashOverlay }]}
+        style={[styles.flashOverlay, { opacity: flashOverlay, backgroundColor: colors.textPrimary }]}
         pointerEvents="none"
       />
     </View>
@@ -191,7 +192,6 @@ export default function CameraScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   camera: {
     ...StyleSheet.absoluteFillObject,
@@ -213,7 +213,6 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   flashLabel: {
-    color: '#FFFFFF',
     fontSize: 10,
     fontWeight: '700',
     marginLeft: 2,
@@ -227,13 +226,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 40,
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: 'rgba(142,142,147,0.3)',
   },
   crosshairV: {
     position: 'absolute',
     width: 1,
     height: 40,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: 'rgba(142,142,147,0.3)',
   },
   bottomBar: {
     position: 'absolute',
@@ -256,7 +255,6 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -264,42 +262,34 @@ const styles = StyleSheet.create({
     width: 62,
     height: 62,
     borderRadius: 31,
-    backgroundColor: '#FFFFFF',
     borderWidth: 3,
-    borderColor: Colors.background,
   },
   flashOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#FFFFFF',
   },
   permissionContainer: {
     flex: 1,
-    backgroundColor: Colors.background,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 32,
   },
   permissionTitle: {
-    color: Colors.textPrimary,
     fontSize: 22,
     fontWeight: '700',
     marginTop: 24,
     marginBottom: 8,
   },
   permissionText: {
-    color: Colors.textSecondary,
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 32,
   },
   permissionButton: {
-    backgroundColor: Colors.accent,
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 32,
   },
   permissionButtonText: {
-    color: '#000000',
     fontSize: 16,
     fontWeight: '700',
   },

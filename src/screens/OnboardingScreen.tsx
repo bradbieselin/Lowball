@@ -10,14 +10,15 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Colors } from '../constants/colors';
+import { useTheme } from '../contexts/ThemeContext';
 import { useOnboardingComplete } from '../navigation/RootNavigator';
 
 const { width } = Dimensions.get('window');
 
 interface Slide {
   id: string;
-  icon: React.ReactNode;
+  iconName: string;
+  iconLib: 'ionicons' | 'material';
   title: string;
   subtitle: string;
   detail: string;
@@ -26,21 +27,24 @@ interface Slide {
 const slides: Slide[] = [
   {
     id: '1',
-    icon: <Ionicons name="camera" size={100} color={Colors.textPrimary} />,
+    iconName: 'camera',
+    iconLib: 'ionicons',
     title: 'Snap It',
     subtitle: 'Take a photo of any product you see',
     detail: "In a store, online, at a friend\u2019s house \u2014 anywhere.",
   },
   {
     id: '2',
-    icon: <Ionicons name="pricetag" size={100} color={Colors.textPrimary} />,
+    iconName: 'pricetag',
+    iconLib: 'ionicons',
     title: 'Find It Cheaper',
     subtitle: 'Lowball searches the internet for the best deals',
     detail: 'We check Amazon, Walmart, Target, eBay and more.',
   },
   {
     id: '3',
-    icon: <MaterialCommunityIcons name="piggy-bank" size={100} color={Colors.textPrimary} />,
+    iconName: 'piggy-bank',
+    iconLib: 'material',
     title: 'Save Big',
     subtitle: 'Get direct links to the lowest prices',
     detail: 'Track how much you save over time.',
@@ -50,6 +54,7 @@ const slides: Slide[] = [
 const ONBOARDING_KEY = '@lowball_onboarding_complete';
 
 export default function OnboardingScreen() {
+  const { colors } = useTheme();
   const setOnboardingDone = useOnboardingComplete();
   const [activeIndex, setActiveIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
@@ -71,20 +76,26 @@ export default function OnboardingScreen() {
 
   const renderSlide = ({ item, index }: { item: Slide; index: number }) => (
     <View style={styles.slide}>
-      <View style={styles.iconContainer}>{item.icon}</View>
-      <Text style={styles.title}>{item.title}</Text>
-      <Text style={styles.subtitle}>{item.subtitle}</Text>
-      <Text style={styles.detail}>{item.detail}</Text>
+      <View style={styles.iconContainer}>
+        {item.iconLib === 'ionicons' ? (
+          <Ionicons name={item.iconName as any} size={100} color={colors.textPrimary} />
+        ) : (
+          <MaterialCommunityIcons name={item.iconName as any} size={100} color={colors.textPrimary} />
+        )}
+      </View>
+      <Text style={[styles.title, { color: colors.textPrimary }]}>{item.title}</Text>
+      <Text style={[styles.subtitle, { color: colors.textPrimary }]}>{item.subtitle}</Text>
+      <Text style={[styles.detail, { color: colors.textSecondary }]}>{item.detail}</Text>
       {index === slides.length - 1 && (
-        <TouchableOpacity style={styles.getStartedButton} onPress={handleGetStarted}>
-          <Text style={styles.getStartedText}>Get Started</Text>
+        <TouchableOpacity style={[styles.getStartedButton, { backgroundColor: colors.accent }]} onPress={handleGetStarted}>
+          <Text style={[styles.getStartedText, { color: colors.accentOnDark }]}>Get Started</Text>
         </TouchableOpacity>
       )}
     </View>
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <FlatList
         ref={flatListRef}
         data={slides}
@@ -101,7 +112,7 @@ export default function OnboardingScreen() {
         {slides.map((_, i) => (
           <View
             key={i}
-            style={[styles.dot, i === activeIndex ? styles.dotActive : styles.dotInactive]}
+            style={[styles.dot, { backgroundColor: i === activeIndex ? colors.accent : colors.border }]}
           />
         ))}
       </View>
@@ -112,7 +123,6 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   slide: {
     width,
@@ -125,27 +135,23 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   title: {
-    color: Colors.textPrimary,
     fontSize: 28,
     fontWeight: '700',
     textAlign: 'center',
     marginBottom: 12,
   },
   subtitle: {
-    color: Colors.textPrimary,
     fontSize: 18,
     fontWeight: '600',
     textAlign: 'center',
     marginBottom: 12,
   },
   detail: {
-    color: Colors.textSecondary,
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
   },
   getStartedButton: {
-    backgroundColor: Colors.accent,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
@@ -153,7 +159,6 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   getStartedText: {
-    color: '#000000',
     fontSize: 16,
     fontWeight: '700',
   },
@@ -168,11 +173,5 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     marginHorizontal: 6,
-  },
-  dotActive: {
-    backgroundColor: Colors.accent,
-  },
-  dotInactive: {
-    backgroundColor: Colors.border,
   },
 });

@@ -12,10 +12,11 @@ import {
   TouchableWithoutFeedback,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Colors } from '../../constants/colors';
+import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthContext } from '../../contexts/AuthContext';
 
 export default function ForgotPasswordScreen() {
+  const { colors } = useTheme();
   const navigation = useNavigation();
   const { resetPassword } = useAuthContext();
   const [email, setEmail] = useState('');
@@ -51,39 +52,39 @@ export default function ForgotPasswordScreen() {
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-        <Text style={styles.backArrow}>←</Text>
+        <Text style={[styles.backArrow, { color: colors.textPrimary }]}>←</Text>
       </TouchableOpacity>
 
       <View style={styles.content}>
         {sent ? (
           <View style={styles.successContainer}>
             <Text style={styles.successIcon}>✉️</Text>
-            <Text style={styles.title}>Check your email</Text>
-            <Text style={styles.subtitle}>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>Check your email</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               Check your email for a reset link.
             </Text>
             <TouchableOpacity
-              style={styles.primaryButton}
+              style={[styles.primaryButton, { backgroundColor: colors.accent }]}
               onPress={() => navigation.goBack()}
             >
-              <Text style={styles.primaryButtonText}>Back to Sign In</Text>
+              <Text style={[styles.primaryButtonText, { color: colors.accentOnDark }]}>Back to Sign In</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <>
-            <Text style={styles.title}>Reset password</Text>
-            <Text style={styles.subtitle}>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>Reset password</Text>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               Enter your email and we'll send you a link to reset your password.
             </Text>
 
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.surfaceLight, color: colors.textPrimary }]}
               placeholder="Email"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -91,13 +92,13 @@ export default function ForgotPasswordScreen() {
               autoCorrect={false}
             />
 
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            {error ? <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text> : null}
 
-            <TouchableOpacity style={styles.primaryButton} onPress={handleSendReset} disabled={loading}>
+            <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.accent }]} onPress={handleSendReset} disabled={loading}>
               {loading ? (
-                <ActivityIndicator color="#000000" />
+                <ActivityIndicator color={colors.accentOnDark} />
               ) : (
-                <Text style={styles.primaryButtonText}>Send Reset Link</Text>
+                <Text style={[styles.primaryButtonText, { color: colors.accentOnDark }]}>Send Reset Link</Text>
               )}
             </TouchableOpacity>
           </>
@@ -111,7 +112,6 @@ export default function ForgotPasswordScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   backButton: {
     position: 'absolute',
@@ -121,7 +121,6 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   backArrow: {
-    color: Colors.textPrimary,
     fontSize: 28,
   },
   content: {
@@ -137,20 +136,16 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   title: {
-    color: Colors.textPrimary,
     fontSize: 28,
     fontWeight: '700',
     marginBottom: 8,
   },
   subtitle: {
-    color: Colors.textSecondary,
     fontSize: 16,
     marginBottom: 32,
     lineHeight: 22,
   },
   input: {
-    backgroundColor: Colors.surfaceLight,
-    color: Colors.textPrimary,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -158,18 +153,15 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   errorText: {
-    color: Colors.danger,
     fontSize: 13,
     marginBottom: 12,
   },
   primaryButton: {
-    backgroundColor: Colors.accent,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
   },
   primaryButtonText: {
-    color: '#000000',
     fontSize: 16,
     fontWeight: '700',
   },
