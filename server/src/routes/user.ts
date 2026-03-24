@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth';
 import prisma from '../lib/prisma';
+import { supabaseAdmin } from '../lib/supabase';
 
 const router = Router();
 
@@ -34,6 +35,17 @@ router.put('/profile', async (req: AuthenticatedRequest, res: Response) => {
       res.status(400).json({ error: 'Invalid email format' });
       return;
     }
+    // Update email in Supabase Auth first
+    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+      req.userId!,
+      { email }
+    );
+    if (authError) {
+      console.error('Supabase auth email update error:', authError);
+      res.status(500).json({ error: 'Failed to update email in auth system' });
+      return;
+    }
+
     const user = await prisma.user.update({
       where: { id: req.userId! },
       data: { email },
@@ -46,6 +58,7 @@ router.put('/profile', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 // POST /api/user/sync-subscription
+// Verifies the user's entitlement with RevenueCat before updating the subscription status.
 router.post('/sync-subscription', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { status } = req.body;
@@ -53,6 +66,39 @@ router.post('/sync-subscription', async (req: AuthenticatedRequest, res: Respons
       res.status(400).json({ error: 'Invalid status. Must be "free" or "pro".' });
       return;
     }
+
+    // Server-side verification: check RevenueCat for the user's actual entitlements
+    const rcApiKey = process.env.REVENUECAT_API_KEY;
+    if (status === 'pro' && !rcApiKey) {
+      res.status(503).json({ error: 'Purchase verification is not configured. Cannot upgrade.' });
+      return;
+    }
+    if (rcApiKey && status === 'pro') {
+      try {
+        const rcRes = await fetch(
+          `https://api.revenuecat.com/v1/subscribers/${req.userId}`,
+          { headers: { Authorization: `Bearer ${rcApiKey}` } }
+        );
+        if (rcRes.ok) {
+          const rcData = await rcRes.json() as any;
+          const adFree = rcData?.subscriber?.entitlements?.ad_free;
+          if (!adFree || !adFree.is_active) {
+            res.status(403).json({ error: 'No active ad_free entitlement found. Purchase not verified.' });
+            return;
+          }
+        } else {
+          console.error('RevenueCat API error:', rcRes.status);
+          // If RevenueCat is unreachable, reject the upgrade to be safe
+          res.status(502).json({ error: 'Unable to verify purchase. Please try again.' });
+          return;
+        }
+      } catch (rcError) {
+        console.error('RevenueCat verification failed:', rcError);
+        res.status(502).json({ error: 'Unable to verify purchase. Please try again.' });
+        return;
+      }
+    }
+
     const user = await prisma.user.update({
       where: { id: req.userId! },
       data: { subscriptionStatus: status },
@@ -67,17 +113,29 @@ router.post('/sync-subscription', async (req: AuthenticatedRequest, res: Respons
 // GET /api/user/saved-scans
 router.get('/saved-scans', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const savedScans = await prisma.savedScan.findMany({
-      where: { userId: req.userId! },
-      include: {
-        scan: {
-          include: { deals: { orderBy: { price: 'asc' }, take: 1 } },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 50));
+    const skip = (page - 1) * limit;
 
-    res.json(savedScans);
+    const [savedScans, total] = await Promise.all([
+      prisma.savedScan.findMany({
+        where: { userId: req.userId! },
+        include: {
+          scan: {
+            include: { deals: { orderBy: { price: 'asc' }, take: 1 } },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      prisma.savedScan.count({ where: { userId: req.userId! } }),
+    ]);
+
+    res.json({
+      savedScans,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
   } catch (error) {
     console.error('Get saved scans error:', error);
     res.status(500).json({ error: 'Failed to fetch saved scans' });
@@ -108,54 +166,6 @@ router.get('/stats', async (req: AuthenticatedRequest, res: Response) => {
   } catch (error) {
     console.error('Get stats error:', error);
     res.status(500).json({ error: 'Failed to fetch stats' });
-  }
-});
-
-// POST /api/track/click
-router.post('/track/click', async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const { scanId, dealId, retailer, price } = req.body;
-    if (!scanId || !dealId || !retailer || price == null) {
-      res.status(400).json({ error: 'scanId, dealId, retailer, and price are required' });
-      return;
-    }
-    if (typeof scanId !== 'string' || typeof dealId !== 'string' || typeof retailer !== 'string' || typeof price !== 'number') {
-      res.status(400).json({ error: 'Invalid parameter types' });
-      return;
-    }
-    if (retailer.length > 100 || price < 0 || price > 999999) {
-      res.status(400).json({ error: 'Invalid parameter values' });
-      return;
-    }
-
-    // Verify the scan belongs to this user
-    const scan = await prisma.scan.findFirst({
-      where: { id: scanId, userId: req.userId! },
-    });
-    if (!scan) {
-      res.status(404).json({ error: 'Scan not found' });
-      return;
-    }
-
-    const click = await prisma.clickTracking.create({
-      data: {
-        userId: req.userId!,
-        scanId,
-        dealId,
-        retailer,
-        price,
-      },
-    });
-
-    await prisma.user.update({
-      where: { id: req.userId! },
-      data: { totalClicks: { increment: 1 } },
-    });
-
-    res.json(click);
-  } catch (error) {
-    console.error('Track click error:', error);
-    res.status(500).json({ error: 'Failed to track click' });
   }
 });
 

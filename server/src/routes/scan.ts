@@ -1,24 +1,20 @@
 import { Router, Response } from 'express';
-import { createClient } from '@supabase/supabase-js';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { scanLimiter } from '../middleware/rateLimit';
 import prisma from '../lib/prisma';
+import { supabaseAdmin } from '../lib/supabase';
 import { identifyProduct, generateSearchQueries } from '../services/ai';
 import { searchDeals } from '../services/deals';
 import crypto from 'crypto';
+import { Prisma } from '@prisma/client';
 
 const router = Router();
-
-const supabase = createClient(
-  process.env.SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
 
 async function uploadImage(base64: string, userId: string): Promise<string> {
   const buffer = Buffer.from(base64, 'base64');
   const fileName = `${userId}/${crypto.randomUUID()}.jpg`;
 
-  const { error } = await supabase.storage
+  const { error } = await supabaseAdmin.storage
     .from('scan-images')
     .upload(fileName, buffer, {
       contentType: 'image/jpeg',
@@ -26,11 +22,11 @@ async function uploadImage(base64: string, userId: string): Promise<string> {
     });
 
   if (error) {
-    console.error('Image upload error:', error);
+    console.warn(`[uploadImage] Failed to upload image for user ${userId}. Scan will proceed without image.`, error);
     return '';
   }
 
-  const { data } = supabase.storage.from('scan-images').getPublicUrl(fileName);
+  const { data } = supabaseAdmin.storage.from('scan-images').getPublicUrl(fileName);
   return data.publicUrl;
 }
 
@@ -42,8 +38,15 @@ router.post('/', scanLimiter, async (req: AuthenticatedRequest, res: Response) =
       res.status(400).json({ error: 'imageBase64 is required' });
       return;
     }
-    if (imageBase64.length > 5 * 1024 * 1024) {
-      res.status(400).json({ error: 'Image too large (max 4MB)' });
+    if (imageBase64.length > 1.4 * 1024 * 1024) {
+      res.status(400).json({ error: 'Image too large (max 1MB)' });
+      return;
+    }
+
+    // Validate that the base64 data is actually a JPEG image
+    const imageBuffer = Buffer.from(imageBase64, 'base64');
+    if (imageBuffer.length < 3 || imageBuffer[0] !== 0xFF || imageBuffer[1] !== 0xD8) {
+      res.status(400).json({ error: 'Invalid image data. Please provide a JPEG image.' });
       return;
     }
 
@@ -52,41 +55,44 @@ router.post('/', scanLimiter, async (req: AuthenticatedRequest, res: Response) =
 
     const imageUrl = await uploadImage(imageBase64, req.userId!);
 
-    const scan = await prisma.scan.create({
-      data: {
-        userId: req.userId!,
-        imageUrl,
-        productName: product.productName,
-        brand: product.brand,
-        model: product.model,
-        category: product.category,
-        attributes: product.attributes,
-        estimatedRetailPrice: product.estimatedRetailPrice,
-        aiConfidence: product.aiConfidence,
-        searchQueries: product.searchQueries,
-        deals: {
-          create: deals.map((d) => ({
-            retailer: d.retailer,
-            retailerLogoUrl: d.retailerLogoUrl,
-            productTitle: d.productTitle,
-            price: d.price,
-            originalPrice: d.originalPrice,
-            currency: d.currency,
-            condition: d.condition,
-            productUrl: d.productUrl,
-            imageUrl: d.imageUrl,
-            savingsAmount: d.savingsAmount,
-            savingsPercent: d.savingsPercent,
-          })),
+    const scan = await prisma.$transaction(async (tx) => {
+      const created = await tx.scan.create({
+        data: {
+          userId: req.userId!,
+          imageUrl,
+          productName: product.productName,
+          brand: product.brand,
+          model: product.model,
+          category: product.category,
+          attributes: product.attributes,
+          estimatedRetailPrice: product.estimatedRetailPrice,
+          aiConfidence: product.aiConfidence,
+          searchQueries: product.searchQueries,
+          deals: {
+            create: deals.map((d) => ({
+              retailer: d.retailer,
+              retailerLogoUrl: d.retailerLogoUrl,
+              productTitle: d.productTitle,
+              price: d.price,
+              originalPrice: d.originalPrice,
+              currency: d.currency,
+              condition: d.condition,
+              productUrl: d.productUrl,
+              imageUrl: d.imageUrl,
+              savingsAmount: d.savingsAmount,
+              savingsPercent: d.savingsPercent,
+            })),
+          },
         },
-      },
-      include: { deals: true },
-    });
+        include: { deals: true },
+      });
 
-    // Increment user's total scans
-    await prisma.user.update({
-      where: { id: req.userId! },
-      data: { totalScans: { increment: 1 } },
+      await tx.user.update({
+        where: { id: req.userId! },
+        data: { totalScans: { increment: 1 } },
+      });
+
+      return created;
     });
 
     res.json(scan);
@@ -169,42 +175,40 @@ router.post('/:id/retry', scanLimiter, async (req: AuthenticatedRequest, res: Re
       return;
     }
 
-    // Generate new search queries from the corrected name
+    // Generate new search queries and deals BEFORE modifying DB
     const searchQueries = await generateSearchQueries(correctedProductName, existingScan.category);
-
-    // Delete old deals
-    await prisma.deal.deleteMany({ where: { scanId: paramId } });
-
-    // Search for new deals
     const estimatedPrice = existingScan.estimatedRetailPrice
       ? Number(existingScan.estimatedRetailPrice)
       : null;
     const deals = await searchDeals(searchQueries, estimatedPrice);
 
-    // Update scan and create new deals
-    const updatedScan = await prisma.scan.update({
-      where: { id: paramId },
-      data: {
-        productName: correctedProductName,
-        aiConfidence: -1, // indicates user_corrected
-        searchQueries,
-        deals: {
-          create: deals.map((d) => ({
-            retailer: d.retailer,
-            retailerLogoUrl: d.retailerLogoUrl,
-            productTitle: d.productTitle,
-            price: d.price,
-            originalPrice: d.originalPrice,
-            currency: d.currency,
-            condition: d.condition,
-            productUrl: d.productUrl,
-            imageUrl: d.imageUrl,
-            savingsAmount: d.savingsAmount,
-            savingsPercent: d.savingsPercent,
-          })),
+    // Atomically delete old deals + update scan + create new deals
+    const updatedScan = await prisma.$transaction(async (tx) => {
+      await tx.deal.deleteMany({ where: { scanId: paramId } });
+      return tx.scan.update({
+        where: { id: paramId },
+        data: {
+          productName: correctedProductName,
+          aiConfidence: -1, // indicates user_corrected
+          searchQueries,
+          deals: {
+            create: deals.map((d) => ({
+              retailer: d.retailer,
+              retailerLogoUrl: d.retailerLogoUrl,
+              productTitle: d.productTitle,
+              price: d.price,
+              originalPrice: d.originalPrice,
+              currency: d.currency,
+              condition: d.condition,
+              productUrl: d.productUrl,
+              imageUrl: d.imageUrl,
+              savingsAmount: d.savingsAmount,
+              savingsPercent: d.savingsPercent,
+            })),
+          },
         },
-      },
-      include: { deals: { orderBy: { price: 'asc' } } },
+        include: { deals: { orderBy: { price: 'asc' } } },
+      });
     });
 
     res.json(updatedScan);
@@ -231,6 +235,10 @@ router.post('/:id/save', async (req: AuthenticatedRequest, res: Response) => {
     });
     res.json(savedScan);
   } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      res.status(409).json({ error: 'Scan already saved' });
+      return;
+    }
     console.error('Save scan error:', error);
     res.status(500).json({ error: 'Failed to save scan' });
   }

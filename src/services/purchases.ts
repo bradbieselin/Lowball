@@ -4,6 +4,8 @@
 
 let Purchases: any = null;
 let initialized = false;
+let currentUserId: string | null = null;
+let initPromise: Promise<void> | null = null;
 
 const REVENUECAT_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY || '';
 const PRODUCT_ID = 'lowball_remove_ads';
@@ -20,16 +22,48 @@ function getPurchases(): any {
 }
 
 export async function initializePurchases(userId: string): Promise<void> {
-  if (initialized || !REVENUECAT_API_KEY) return;
+  // Same user already initialized
+  if (initialized && currentUserId === userId) return;
+
+  // Different user — log out the old one first
+  if (initialized && currentUserId && currentUserId !== userId) {
+    await logOutPurchases();
+  }
+
+  // Deduplicate concurrent init calls
+  if (initPromise) return initPromise;
+
+  initPromise = (async () => {
+    if (!REVENUECAT_API_KEY) return;
+    const P = getPurchases();
+    if (!P) return;
+
+    try {
+      P.configure({ apiKey: REVENUECAT_API_KEY, appUserID: userId });
+      initialized = true;
+      currentUserId = userId;
+    } catch (err) {
+      console.error('RevenueCat init error:', err);
+    } finally {
+      initPromise = null;
+    }
+  })();
+
+  return initPromise;
+}
+
+export async function logOutPurchases(): Promise<void> {
   const P = getPurchases();
-  if (!P) return;
+  if (!P || !initialized) return;
 
   try {
-    P.configure({ apiKey: REVENUECAT_API_KEY, appUserID: userId });
-    initialized = true;
-  } catch (err) {
-    console.error('RevenueCat init error:', err);
+    await P.logOut();
+  } catch {
+    // logOut can throw if not configured — ignore
   }
+  initialized = false;
+  currentUserId = null;
+  initPromise = null;
 }
 
 export async function purchaseRemoveAds(): Promise<boolean> {
@@ -87,8 +121,13 @@ export function addCustomerInfoListener(callback: (isAdFree: boolean) => void): 
     const listener = (info: any) => {
       callback(info.entitlements.active[ENTITLEMENT_ID] != null);
     };
-    P.addCustomerInfoUpdateListener(listener);
-    return () => P.removeCustomerInfoUpdateListener(listener);
+    // addCustomerInfoUpdateListener returns an unsubscribe function in newer SDK versions
+    const unsub = P.addCustomerInfoUpdateListener(listener);
+    if (typeof unsub === 'function') return unsub;
+    // Fallback for older SDK versions
+    return () => {
+      try { P.removeCustomerInfoUpdateListener(listener); } catch {}
+    };
   } catch {
     return () => {};
   }

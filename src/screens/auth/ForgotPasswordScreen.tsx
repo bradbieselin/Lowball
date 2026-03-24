@@ -8,6 +8,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../../constants/colors';
@@ -21,21 +23,33 @@ export default function ForgotPasswordScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
   const handleSendReset = async () => {
     if (!email) return;
+    if (!EMAIL_REGEX.test(email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
       await resetPassword(email);
-      setSent(true);
     } catch (err: any) {
-      setError(err.message || 'Failed to send reset link');
-    } finally {
-      setLoading(false);
+      // Only surface network errors, not Supabase-specific errors
+      // to prevent email enumeration
+      if (err.message === 'Network request failed') {
+        setError('Network error. Please check your connection and try again.');
+        setLoading(false);
+        return;
+      }
     }
+    setSent(true);
+    setLoading(false);
   };
 
   return (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -90,6 +104,7 @@ export default function ForgotPasswordScreen() {
         )}
       </View>
     </KeyboardAvoidingView>
+    </TouchableWithoutFeedback>
   );
 }
 

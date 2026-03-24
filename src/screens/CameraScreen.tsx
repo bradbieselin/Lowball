@@ -76,14 +76,27 @@ export default function CameraScreen() {
     }
   };
 
+  const pickingRef = useRef(false);
+
   const handlePickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.7,
-    });
-    if (!result.canceled && result.assets[0]) {
-      const compressed = await compressImage(result.assets[0].uri);
-      navigation.navigate('Scanning', { imageUri: compressed });
+    if (pickingRef.current) return;
+    pickingRef.current = true;
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.7,
+      });
+      if (!result.canceled && result.assets[0]) {
+        try {
+          const compressed = await compressImage(result.assets[0].uri);
+          navigation.navigate('Scanning', { imageUri: compressed });
+        } catch {
+          // Compression failed — use original image
+          navigation.navigate('Scanning', { imageUri: result.assets[0].uri });
+        }
+      }
+    } finally {
+      setTimeout(() => { pickingRef.current = false; }, 1000);
     }
   };
 

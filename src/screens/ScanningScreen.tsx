@@ -36,7 +36,7 @@ export default function ScanningScreen() {
   const navigation = useNavigation<ScanningNav>();
   const route = useRoute<ScanningRoute>();
   const { imageUri } = route.params;
-  const scanMutation = useScanProduct();
+  const { mutate } = useScanProduct();
   const { shouldShowAds, loadAd, showAd, isAdLoaded } = useAds();
 
   const [messageIndex, setMessageIndex] = useState(0);
@@ -107,7 +107,7 @@ export default function ScanningScreen() {
   const doScan = useCallback(() => {
     setError(null);
     startTime.current = Date.now();
-    scanMutation.mutate(imageUri, {
+    mutate(imageUri, {
       onSuccess: (data) => {
         if (isMounted.current) {
           navigateAfterAd(data.id);
@@ -119,7 +119,7 @@ export default function ScanningScreen() {
         }
       },
     });
-  }, [imageUri, scanMutation, navigateAfterAd]);
+  }, [imageUri, mutate, navigateAfterAd]);
 
   // Trigger scan mutation on mount
   useEffect(() => {

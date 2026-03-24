@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Keyboard,
   TouchableWithoutFeedback,
+  Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -29,7 +30,14 @@ export default function SignUpScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const [successMessage, setSuccessMessage] = useState('');
+
   const handleSignUp = async () => {
+    if (!EMAIL_REGEX.test(email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
     if (password.length < 8) {
       setPasswordError('Password must be at least 8 characters');
       return;
@@ -37,10 +45,19 @@ export default function SignUpScreen() {
     setPasswordError('');
     setLoading(true);
     setError('');
+    setSuccessMessage('');
     try {
       await signUp(email, password);
+      // Always show the same generic message to prevent email enumeration
+      setSuccessMessage('Check your email for a confirmation link.');
     } catch (err: any) {
-      setError(err.message || 'Sign up failed');
+      // Map known Supabase error messages to generic ones to prevent email enumeration
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('already registered') || msg.toLowerCase().includes('already been registered')) {
+        setSuccessMessage('Check your email for a confirmation link.');
+      } else {
+        setError(msg || 'Sign up failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -90,6 +107,7 @@ export default function SignUpScreen() {
         ) : null}
 
         {error ? <Text style={styles.authError}>{error}</Text> : null}
+        {successMessage ? <Text style={styles.successText}>{successMessage}</Text> : null}
 
         <TouchableOpacity style={styles.primaryButton} onPress={handleSignUp} disabled={loading}>
           {loading ? (
@@ -105,11 +123,11 @@ export default function SignUpScreen() {
           <View style={styles.dividerLine} />
         </View>
 
-        <TouchableOpacity style={styles.socialButton}>
+        <TouchableOpacity style={styles.socialButton} onPress={() => Alert.alert('Coming Soon', 'Social login will be available in a future update.')}>
           <Text style={styles.socialButtonText}>Continue with Google</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.socialButton}>
+        <TouchableOpacity style={styles.socialButton} onPress={() => Alert.alert('Coming Soon', 'Social login will be available in a future update.')}>
           <Text style={styles.socialButtonText}>Continue with Apple</Text>
         </TouchableOpacity>
 
@@ -172,6 +190,12 @@ const styles = StyleSheet.create({
   },
   authError: {
     color: Colors.danger,
+    fontSize: 13,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  successText: {
+    color: Colors.accent,
     fontSize: 13,
     marginBottom: 12,
     textAlign: 'center',

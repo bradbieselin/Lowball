@@ -162,7 +162,7 @@ function mapResults(results: any[], estimatedRetailPrice: number | null): DealRe
         retailerLogoUrl: r.thumbnail || null,
         productTitle: r.title || 'Product',
         price,
-        originalPrice: originalPrice || null,
+        originalPrice: originalPrice ?? null,
         currency: 'USD',
         condition: r.second_hand_condition || (r.condition?.toLowerCase().includes('refurbish') ? 'Refurbished' : 'New'),
         productUrl: applyAffiliateLink(

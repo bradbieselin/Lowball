@@ -67,24 +67,39 @@ export function showAd(): Promise<void> {
 
     adShowing = true;
 
-    // Listen for close to resolve the promise
-    const unsubscribe = interstitial.addAdEventListener(AdEventType.CLOSED, () => {
-      unsubscribe();
+    let settled = false;
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      unsubClose();
+      unsubError();
       resolve();
+    };
+
+    // Listen for close to resolve the promise
+    const unsubClose = interstitial.addAdEventListener(AdEventType.CLOSED, () => {
+      settle();
     });
 
     // Also resolve on error so we never block
     const unsubError = interstitial.addAdEventListener(AdEventType.ERROR, () => {
-      unsubError();
       adShowing = false;
-      resolve();
+      settle();
     });
+
+    // Timeout safety net — never block the user longer than 10s
+    timeoutId = setTimeout(() => {
+      adShowing = false;
+      settle();
+    }, 10000);
 
     try {
       interstitial.show();
     } catch {
       adShowing = false;
-      resolve();
+      settle();
     }
   });
 }

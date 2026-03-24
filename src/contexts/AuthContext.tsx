@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { initializePurchases } from '../services/purchases';
+import { initializePurchases, logOutPurchases } from '../services/purchases';
 import type { User, Session } from '@supabase/supabase-js';
 
 interface AuthContextType {
@@ -18,10 +18,16 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const auth = useAuth();
 
-  // Initialize RevenueCat when user is authenticated
+  // Initialize RevenueCat when user is authenticated, log out when they sign out
   useEffect(() => {
     if (auth.user?.id) {
-      initializePurchases(auth.user.id);
+      initializePurchases(auth.user.id).catch((err) =>
+        console.warn('RevenueCat init failed:', err)
+      );
+    } else {
+      logOutPurchases().catch((err) =>
+        console.warn('RevenueCat logout failed:', err)
+      );
     }
   }, [auth.user?.id]);
 

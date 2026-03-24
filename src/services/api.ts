@@ -50,7 +50,7 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
     throw new Error(body.error || 'Too many requests. Please slow down.');
   }
 
-  // 401 interceptor: attempt a single token refresh then retry
+  // 401 interceptor: attempt a single token refresh
   if (res.status === 401) {
     const { data, error } = await supabase.auth.refreshSession();
 
@@ -60,7 +60,15 @@ async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> 
       throw new Error('Your session has expired. Please sign in again.');
     }
 
-    res = await rawFetch(path, data.session.access_token, options);
+    // Only retry idempotent (GET) requests automatically.
+    // Non-GET requests (POST, PUT, DELETE) could cause duplicate side effects,
+    // so we refresh the token but let the caller decide whether to retry.
+    const method = (options.method ?? 'GET').toUpperCase();
+    if (method === 'GET') {
+      res = await rawFetch(path, data.session.access_token, options);
+    } else {
+      throw new Error('Your session was refreshed. Please try again.');
+    }
   }
 
   if (!res.ok) {
@@ -82,7 +90,7 @@ export async function scanProduct(imageUri: string): Promise<Scan> {
 }
 
 export async function getScan(scanId: string): Promise<Scan> {
-  return apiFetch<Scan>(`/api/scan/${scanId}`);
+  return apiFetch<Scan>(`/api/scan/${encodeURIComponent(scanId)}`);
 }
 
 export async function getScans(page: number = 1): Promise<PaginatedScans> {
@@ -90,27 +98,28 @@ export async function getScans(page: number = 1): Promise<PaginatedScans> {
 }
 
 export async function retryScan(scanId: string, correctedProductName: string): Promise<Scan> {
-  return apiFetch<Scan>(`/api/scan/${scanId}/retry`, {
+  return apiFetch<Scan>(`/api/scan/${encodeURIComponent(scanId)}/retry`, {
     method: 'POST',
     body: JSON.stringify({ correctedProductName }),
   });
 }
 
 export async function saveScan(scanId: string): Promise<SavedScanRecord> {
-  return apiFetch<SavedScanRecord>(`/api/scan/${scanId}/save`, { method: 'POST' });
+  return apiFetch<SavedScanRecord>(`/api/scan/${encodeURIComponent(scanId)}/save`, { method: 'POST' });
 }
 
 export async function unsaveScan(scanId: string): Promise<{ success: boolean }> {
-  return apiFetch<{ success: boolean }>(`/api/scan/${scanId}/save`, { method: 'DELETE' });
+  return apiFetch<{ success: boolean }>(`/api/scan/${encodeURIComponent(scanId)}/save`, { method: 'DELETE' });
 }
 
-export async function getSavedScans(): Promise<any[]> {
-  return apiFetch<any[]>('/api/user/saved-scans');
+export async function getSavedScans(): Promise<(SavedScanRecord & { scan?: Scan })[]> {
+  const res = await apiFetch<{ savedScans: (SavedScanRecord & { scan?: Scan })[]; pagination: any }>('/api/user/saved-scans');
+  return res.savedScans;
 }
 
 export async function isScanSaved(scanId: string): Promise<boolean> {
   const saved = await getSavedScans();
-  return saved.some((s: any) => s.scanId === scanId);
+  return saved.some((s) => s.scanId === scanId);
 }
 
 export async function getUserProfile(): Promise<UserProfile> {
@@ -128,8 +137,8 @@ export async function trackClick(scanId: string, dealId: string, retailer: strin
   });
 }
 
-export async function syncSubscription(status: string): Promise<void> {
-  await apiFetch<void>('/api/user/sync-subscription', {
+export async function syncSubscription(status: 'free' | 'pro'): Promise<{ subscriptionStatus: string }> {
+  return apiFetch<{ subscriptionStatus: string }>('/api/user/sync-subscription', {
     method: 'POST',
     body: JSON.stringify({ status }),
   });

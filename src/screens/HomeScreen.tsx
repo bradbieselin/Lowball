@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -27,6 +27,82 @@ type HomeNav = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 const SCAN_BUTTON_SIZE = 88;
 const RING_SIZE = SCAN_BUTTON_SIZE + 24;
 const OUTER_GLOW_SIZE = RING_SIZE + 60;
+
+const SKELETON_PLACEHOLDER_COUNT = 3;
+
+function SkeletonScanCard() {
+  const shimmer = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 1000, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 1000, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [shimmer]);
+
+  const opacity = shimmer.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0.6],
+  });
+
+  return (
+    <View style={skeletonStyles.card}>
+      <Animated.View style={[skeletonStyles.thumbnail, { opacity }]} />
+      <View style={skeletonStyles.info}>
+        <Animated.View style={[skeletonStyles.nameLine, { opacity }]} />
+        <Animated.View style={[skeletonStyles.priceLine, { opacity }]} />
+      </View>
+    </View>
+  );
+}
+
+function SkeletonList() {
+  return (
+    <View>
+      {Array.from({ length: SKELETON_PLACEHOLDER_COUNT }).map((_, i) => (
+        <SkeletonScanCard key={i} />
+      ))}
+    </View>
+  );
+}
+
+const skeletonStyles = StyleSheet.create({
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  thumbnail: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    backgroundColor: Colors.surfaceLight,
+  },
+  info: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  nameLine: {
+    width: '65%',
+    height: 14,
+    borderRadius: 4,
+    backgroundColor: Colors.surfaceLight,
+    marginBottom: 10,
+  },
+  priceLine: {
+    width: '40%',
+    height: 20,
+    borderRadius: 4,
+    backgroundColor: Colors.surfaceLight,
+  },
+});
 
 function HowItWorksBar() {
   return (
@@ -57,7 +133,7 @@ function HowItWorksBar() {
 
 export default function HomeScreen() {
   const navigation = useNavigation<HomeNav>();
-  const { data, isLoading, refetch, isRefetching } = useRecentScans();
+  const { data, isLoading, refetch, isRefetching, fetchNextPage, hasNextPage, isFetchingNextPage } = useRecentScans();
   const { loadAd: preloadAd } = useAds();
 
   // Preload an ad so it's ready when the user finishes scanning
@@ -81,18 +157,25 @@ export default function HomeScreen() {
   );
 
   useEffect(() => {
-    Animated.loop(
+    const pulseLoop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 0.8, duration: 1800, useNativeDriver: true }),
         Animated.timing(pulseAnim, { toValue: 0.4, duration: 1800, useNativeDriver: true }),
       ])
-    ).start();
+    );
+    pulseLoop.start();
 
-    Animated.loop(
+    const ringLoop = Animated.loop(
       Animated.timing(ringRotate, { toValue: 1, duration: 8000, useNativeDriver: true })
-    ).start();
+    );
+    ringLoop.start();
 
     Animated.timing(fadeIn, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+
+    return () => {
+      pulseLoop.stop();
+      ringLoop.stop();
+    };
   }, [pulseAnim, ringRotate, fadeIn]);
 
   const ringSpin = ringRotate.interpolate({
@@ -103,7 +186,7 @@ export default function HomeScreen() {
   const scanPressedRef = useRef(false);
   const buttonPulse = useRef(new Animated.Value(1)).current;
   const buttonTap = useRef(new Animated.Value(1)).current;
-  const buttonScale = Animated.multiply(buttonPulse, buttonTap);
+  const buttonScale = useMemo(() => Animated.multiply(buttonPulse, buttonTap), [buttonPulse, buttonTap]);
 
   useEffect(() => {
     const pulse = Animated.loop(
@@ -137,6 +220,16 @@ export default function HomeScreen() {
   const handleRefresh = useCallback(() => {
     refetch();
   }, [refetch]);
+
+  const renderItem = useCallback(({ item }: { item: ScanCardData }) => (
+    <ScanCard scan={item} onPress={handleScanCardPress} />
+  ), [handleScanCardPress]);
+
+  const handleEndReached = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
     <View style={styles.container}>
@@ -180,7 +273,7 @@ export default function HomeScreen() {
           </View>
 
           {isLoading ? (
-            <ActivityIndicator color={Colors.accent} style={{ marginTop: 24 }} />
+            <SkeletonList />
           ) : scans.length === 0 ? (
             <View style={styles.emptyState}>
               <LinearGradient
@@ -198,9 +291,11 @@ export default function HomeScreen() {
             <FlatList
               data={scans}
               keyExtractor={(item) => item.id}
-              renderItem={({ item }) => <ScanCard scan={item} onPress={handleScanCardPress} />}
+              renderItem={renderItem}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.listContent}
+              onEndReached={handleEndReached}
+              onEndReachedThreshold={0.5}
               refreshControl={
                 <RefreshControl
                   refreshing={isRefetching}

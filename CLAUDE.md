@@ -103,6 +103,10 @@ npx expo start
 ```
 Phone must be on same Wi-Fi. API URL in .env points to local IP.
 
+## Development Process
+- **Fix bugs incrementally, one at a time.** After each fix, run `npx tsc --noEmit` (and `cd server && npx tsc --noEmit` for server changes) to verify the build still passes before moving to the next fix. Do NOT batch many fixes into one large change — if something breaks, it's impossible to tell which fix caused it.
+- When auditing or refactoring, make a small change → verify → commit-ready state → next change.
+
 ## Rules
 - Green (#00E676) always means money saved
 - Never block the user if an ad fails to load

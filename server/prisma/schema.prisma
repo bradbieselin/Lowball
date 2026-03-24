@@ -7,15 +7,20 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum SubscriptionStatus {
+  free
+  pro
+}
+
 model User {
-  id                 String         @id @default(uuid()) @db.Uuid
-  email              String         @unique
-  createdAt          DateTime       @default(now()) @map("created_at")
-  updatedAt          DateTime       @updatedAt @map("updated_at")
-  subscriptionStatus String         @default("free") @map("subscription_status")
-  totalScans         Int            @default(0) @map("total_scans")
-  totalSavings       Decimal        @default(0) @map("total_savings") @db.Decimal(10, 2)
-  totalClicks        Int            @default(0) @map("total_clicks")
+  id                 String             @id @default(uuid()) @db.Uuid
+  email              String             @unique
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+  subscriptionStatus SubscriptionStatus @default(free) @map("subscription_status")
+  totalScans         Int                @default(0) @map("total_scans")
+  totalSavings       Decimal            @default(0) @map("total_savings") @db.Decimal(10, 2)
+  totalClicks        Int                @default(0) @map("total_clicks")
   scans              Scan[]
   savedScans         SavedScan[]
   clickTracking      ClickTracking[]
@@ -41,6 +46,7 @@ model Scan {
   savedScans           SavedScan[]
   clickTracking        ClickTracking[]
 
+  @@index([userId])
   @@map("scans")
 }
 
@@ -62,6 +68,7 @@ model Deal {
   scan            Scan           @relation(fields: [scanId], references: [id], onDelete: Cascade)
   clickTracking   ClickTracking[]
 
+  @@index([scanId])
   @@map("deals")
 }
 
@@ -74,6 +81,7 @@ model SavedScan {
   scan      Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
 
   @@unique([userId, scanId])
+  @@index([userId])
   @@map("saved_scans")
 }
 
@@ -89,5 +97,7 @@ model ClickTracking {
   scan      Scan     @relation(fields: [scanId], references: [id], onDelete: Cascade)
   deal      Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
 
+  @@index([userId])
+  @@index([scanId])
   @@map("click_tracking")
 }

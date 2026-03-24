@@ -57,8 +57,10 @@ export default function ResultsScreen() {
     setIsSaved(alreadySaved);
   }, [alreadySaved]);
 
+  const hapticFiredRef = useRef(false);
   useEffect(() => {
-    if (scan) {
+    if (scan && !hapticFiredRef.current) {
+      hapticFiredRef.current = true;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   }, [scan]);
@@ -99,6 +101,10 @@ export default function ResultsScreen() {
     }
     trackClick(scanId, deal.id, deal.retailer, deal.price).catch(() => {});
   }, [scanId]);
+
+  const renderDeal = useCallback(({ item }: { item: DealCardData }) => (
+    <DealCard deal={item} onPress={handleDealPress} />
+  ), [handleDealPress]);
 
   const handleSave = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -320,7 +326,7 @@ export default function ResultsScreen() {
             </Text>
           </>
         }
-        renderItem={({ item }) => <DealCard deal={item} onPress={handleDealPress} />}
+        renderItem={renderDeal}
       />
 
       <View style={styles.bottomBar}>

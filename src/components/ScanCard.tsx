@@ -17,6 +17,7 @@ interface ScanCardProps {
 }
 
 function ScanCard({ scan, onPress }: ScanCardProps) {
+  const savings = scan.originalPrice - scan.bestPrice;
   return (
     <TouchableOpacity
       style={styles.card}
@@ -35,11 +36,13 @@ function ScanCard({ scan, onPress }: ScanCardProps) {
           </Text>
         </View>
       </View>
-      <View style={styles.savingsBadge}>
-        <Text style={styles.savingsText}>
-          {formatSavingsAmount(scan.originalPrice, scan.bestPrice)}
-        </Text>
-      </View>
+      {savings > 0.01 && (
+        <View style={styles.savingsBadge}>
+          <Text style={styles.savingsText}>
+            {formatSavingsAmount(scan.originalPrice, scan.bestPrice)}
+          </Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 }

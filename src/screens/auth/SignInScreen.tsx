@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Keyboard,
   TouchableWithoutFeedback,
+  Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -28,8 +29,14 @@ export default function SignInScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
   const handleSignIn = async () => {
     if (!email || !password) return;
+    if (!EMAIL_REGEX.test(email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -97,11 +104,11 @@ export default function SignInScreen() {
           <View style={styles.dividerLine} />
         </View>
 
-        <TouchableOpacity style={styles.socialButton}>
+        <TouchableOpacity style={styles.socialButton} onPress={() => Alert.alert('Coming Soon', 'Social login will be available in a future update.')}>
           <Text style={styles.socialButtonText}>Continue with Google</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.socialButton}>
+        <TouchableOpacity style={styles.socialButton} onPress={() => Alert.alert('Coming Soon', 'Social login will be available in a future update.')}>
           <Text style={styles.socialButtonText}>Continue with Apple</Text>
         </TouchableOpacity>
 

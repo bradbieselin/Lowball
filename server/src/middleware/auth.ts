@@ -1,15 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { createClient } from '@supabase/supabase-js';
 import prisma from '../lib/prisma';
-
-if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('FATAL: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set');
-}
-
-const supabase = createClient(
-  process.env.SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
+import { supabaseAdmin } from '../lib/supabase';
 
 export interface AuthenticatedRequest extends Request {
   userId?: string;
@@ -29,7 +20,7 @@ export async function authMiddleware(
   const token = authHeader.replace('Bearer ', '');
 
   try {
-    const { data, error } = await supabase.auth.getUser(token);
+    const { data, error } = await supabaseAdmin.auth.getUser(token);
     if (error || !data.user) {
       res.status(401).json({ error: 'Invalid or expired token' });
       return;

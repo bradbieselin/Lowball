@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { setForceSignOut } from '../services/api';
 import type { User, Session } from '@supabase/supabase-js';
@@ -8,9 +8,16 @@ export function useAuth() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Track whether the auth state listener has fired at least once.
+  // Once it has, it becomes the sole source of truth and getSession
+  // results are ignored to avoid race conditions.
+  const listenerFiredRef = useRef(false);
+
   // Register the force-sign-out callback so the API layer can clear auth state
   // when a token refresh fails, without needing React context.
-  const forceSignOut = useCallback(() => {
+  const forceSignOut = useCallback(async () => {
+    // Clear the persisted Supabase session, not just React state
+    await supabase.auth.signOut().catch(() => {});
     setUser(null);
     setSession(null);
   }, []);
@@ -20,16 +27,22 @@ export function useAuth() {
   }, [forceSignOut]);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Subscribe to auth state changes first — this is the source of truth
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      listenerFiredRef.current = true;
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
+    // Use getSession only as a fallback for the initial state, in case the
+    // listener hasn't fired yet by the time the promise resolves.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!listenerFiredRef.current) {
+        setSession(session);
+        setUser(session?.user ?? null);
+        setLoading(false);
+      }
     });
 
     return () => subscription.unsubscribe();
