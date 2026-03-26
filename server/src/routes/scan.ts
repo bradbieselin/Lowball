@@ -87,9 +87,19 @@ router.post('/', scanLimiter, async (req: AuthenticatedRequest, res: Response) =
         include: { deals: true },
       });
 
+      // Calculate savings: estimatedRetailPrice - best deal price
+      let savings = 0;
+      if (product.estimatedRetailPrice && deals.length > 0) {
+        const bestPrice = Math.min(...deals.map((d) => d.price));
+        savings = Math.max(0, product.estimatedRetailPrice - bestPrice);
+      }
+
       await tx.user.update({
         where: { id: req.userId! },
-        data: { totalScans: { increment: 1 } },
+        data: {
+          totalScans: { increment: 1 },
+          totalSavings: { increment: savings },
+        },
       });
 
       return created;

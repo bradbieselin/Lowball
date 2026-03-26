@@ -169,4 +169,24 @@ router.get('/stats', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+// DELETE /api/user/account — permanently delete user and all data
+router.delete('/account', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    // Delete from app_users first (cascades to scans, deals, saved_scans, click_tracking)
+    await prisma.user.delete({ where: { id: req.userId! } });
+
+    // Delete from Supabase Auth
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(req.userId!);
+    if (error) {
+      console.error('Supabase auth delete error:', error);
+      // Data is already deleted from our DB, so still return success
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete account error:', error);
+    res.status(500).json({ error: 'Failed to delete account' });
+  }
+});
+
 export default router;

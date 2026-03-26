@@ -6,10 +6,13 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
-  SafeAreaView,
   ActivityIndicator,
+  TextInput,
+  Keyboard,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../contexts/ThemeContext';
@@ -18,6 +21,8 @@ import { useUserStats } from '../hooks/useUser';
 import { useSavedScans } from '../hooks/useScans';
 import { usePurchases } from '../hooks/usePurchases';
 import { useAuthContext } from '../contexts/AuthContext';
+import { updateEmail, deleteAccount } from '../services/api';
+import { supabase } from '../lib/supabase';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
 type ProfileNav = NativeStackNavigationProp<RootStackParamList, 'Profile'>;
@@ -53,13 +58,15 @@ function MenuRow({ label, rightText, rightTextColor, rightElement, onPress, colo
 }
 
 export default function ProfileScreen() {
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<ProfileNav>();
-  const { signOut } = useAuthContext();
+  const { user, signOut } = useAuthContext();
   const { colors, mode, setMode, isDark } = useTheme();
   const { data: stats, isLoading: statsLoading } = useUserStats();
   const { data: savedScansRaw, isLoading: savedLoading } = useSavedScans();
   const { isAdFree, loading: purchaseLoading, buyRemoveAds, restore } = usePurchases();
   const [restoring, setRestoring] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const savedScans: ScanCardData[] = (savedScansRaw ?? []).map((s: any) => ({
     id: s.scan?.id ?? s.scanId,
@@ -67,12 +74,73 @@ export default function ProfileScreen() {
     productName: s.scan?.productName ?? 'Unknown Product',
     bestPrice: s.scan?.deals?.[0]?.price != null ? parseFloat(s.scan.deals[0].price) : 0,
     originalPrice: s.scan?.estimatedRetailPrice != null ? parseFloat(s.scan.estimatedRetailPrice) : 0,
+    aiConfidence: s.scan?.aiConfidence,
   }));
 
   const handleScanCardPress = useCallback((scanId: string) => {
     navigation.navigate('Results', { scanId });
   }, [navigation]);
 
+  // === Update Email ===
+  const handleUpdateEmail = useCallback(() => {
+    Alert.prompt(
+      'Update Email',
+      'Enter your new email address:',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Update',
+          onPress: async (newEmail) => {
+            if (!newEmail || !newEmail.trim()) return;
+            const trimmed = newEmail.trim();
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(trimmed)) {
+              Alert.alert('Invalid Email', 'Please enter a valid email address.');
+              return;
+            }
+            try {
+              await updateEmail(trimmed);
+              Alert.alert('Email Updated', `Your email has been changed to ${trimmed}.`);
+            } catch (err: any) {
+              Alert.alert('Update Failed', err.message || 'Could not update email. Please try again.');
+            }
+          },
+        },
+      ],
+      'plain-text',
+      user?.email ?? '',
+    );
+  }, [user?.email]);
+
+  // === Change Password ===
+  const handleChangePassword = useCallback(() => {
+    const email = user?.email;
+    if (!email) {
+      Alert.alert('No Email', 'No email associated with this account. Cannot send password reset.');
+      return;
+    }
+    Alert.alert(
+      'Change Password',
+      `We'll send a password reset link to ${email}.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send Link',
+          onPress: async () => {
+            try {
+              const { error } = await supabase.auth.resetPasswordForEmail(email);
+              if (error) throw error;
+              Alert.alert('Link Sent', 'Check your email for the password reset link.');
+            } catch (err: any) {
+              Alert.alert('Failed', err.message || 'Could not send reset link. Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  }, [user?.email]);
+
+  // === Remove Ads ===
   const handleRemoveAds = useCallback(async () => {
     try {
       const success = await buyRemoveAds();
@@ -84,6 +152,7 @@ export default function ProfileScreen() {
     }
   }, [buyRemoveAds]);
 
+  // === Restore Purchases ===
   const handleRestore = useCallback(async () => {
     setRestoring(true);
     try {
@@ -100,33 +169,100 @@ export default function ProfileScreen() {
     }
   }, [restore]);
 
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-    } catch { /* ignore */ }
-  };
+  // === Rate Lowball ===
+  const handleRate = useCallback(() => {
+    // This will work once the app is on the App Store.
+    // For now it opens the App Store to the app's page.
+    const appStoreUrl = 'https://apps.apple.com/app/id[APP_ID]'; // Replace with real ID when published
+    Linking.openURL('itms-apps://itunes.apple.com/app/id[APP_ID]?action=write-review').catch(() => {
+      Alert.alert('Not Available', 'Rating is available once the app is published to the App Store.');
+    });
+  }, []);
 
-  const handleDeleteAccount = () => {
+  // === Sign Out ===
+  const handleSignOut = useCallback(() => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut();
+            } catch { /* ignore */ }
+          },
+        },
+      ],
+    );
+  }, [signOut]);
+
+  // === Delete Account ===
+  const handleDeleteAccount = useCallback(() => {
     Alert.alert(
       'Delete Account',
-      'Please contact support@lowball.app to delete your account.',
-      [{ text: 'OK' }]
+      'This will permanently delete your account and all your data. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            // Double confirmation
+            Alert.alert(
+              'Are you absolutely sure?',
+              'All your scans, saved deals, and account data will be permanently deleted.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete Forever',
+                  style: 'destructive',
+                  onPress: async () => {
+                    setDeleting(true);
+                    try {
+                      await deleteAccount();
+                      await signOut();
+                    } catch (err: any) {
+                      Alert.alert('Failed', err.message || 'Could not delete account. Please try again.');
+                      setDeleting(false);
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+      ],
     );
-  };
+  }, [signOut]);
+
+  // === Contact Us ===
+  const handleContact = useCallback(() => {
+    Linking.openURL('mailto:support@lowball.app').catch(() => {
+      Alert.alert('Email', 'Send us an email at support@lowball.app');
+    });
+  }, []);
+
+  // === Privacy Policy / Terms ===
+  const handlePrivacyPolicy = useCallback(() => {
+    Linking.openURL('https://lowball.app/privacy').catch(() => {});
+  }, []);
+
+  const handleTerms = useCallback(() => {
+    Linking.openURL('https://lowball.app/terms').catch(() => {});
+  }, []);
 
   const totalSavings = stats?.totalSavings ? parseFloat(stats.totalSavings).toFixed(2) : '0.00';
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Profile</Text>
-        <View style={{ width: 24 }} />
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Settings</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {/* Savings Stats Card */}
         <View style={[styles.statsCard, { backgroundColor: colors.surface }]}>
           {statsLoading ? (
@@ -134,7 +270,7 @@ export default function ProfileScreen() {
           ) : (
             <>
               <Text style={[styles.statsLabel, { color: colors.textSecondary }]}>Total Saved</Text>
-              <Text style={[styles.statsBig, { color: colors.accent }]}>${totalSavings}</Text>
+              <Text style={[styles.statsBig, { color: colors.savings }]}>${totalSavings}</Text>
               <View style={styles.statsRow}>
                 <View>
                   <Text style={[styles.statsLabel, { color: colors.textSecondary }]}>Scans</Text>
@@ -212,8 +348,13 @@ export default function ProfileScreen() {
         {/* Account */}
         <Text style={[styles.sectionHeader, { color: colors.textPrimary }]}>Account</Text>
         <View style={[styles.menuGroup, { backgroundColor: colors.surface }]}>
-          <MenuRow label="Update Email" onPress={() => {}} colors={colors} />
-          <MenuRow label="Change Password" onPress={() => {}} colors={colors} />
+          <MenuRow
+            label="Update Email"
+            rightText={user?.email ?? ''}
+            onPress={handleUpdateEmail}
+            colors={colors}
+          />
+          <MenuRow label="Change Password" onPress={handleChangePassword} colors={colors} />
           {!isAdFree && (
             <MenuRow
               label="Remove Ads"
@@ -234,40 +375,43 @@ export default function ProfileScreen() {
 
         {isAdFree && (
           <View style={styles.adFreeBadge}>
-            <Ionicons name="checkmark-circle" size={16} color={colors.accent} />
-            <Text style={[styles.adFreeText, { color: colors.accent }]}>Ad-free — thank you for your support!</Text>
+            <Ionicons name="checkmark-circle" size={16} color={colors.savings} />
+            <Text style={[styles.adFreeText, { color: colors.savings }]}>Ad-free — thank you for your support!</Text>
           </View>
         )}
 
         {/* About */}
         <Text style={[styles.sectionHeader, { color: colors.textPrimary }]}>About</Text>
         <View style={[styles.menuGroup, { backgroundColor: colors.surface }]}>
-          <MenuRow label="Rate Lowball" onPress={() => {}} colors={colors} />
-          <MenuRow label="Privacy Policy" onPress={() => {}} colors={colors} />
-          <MenuRow label="Terms of Service" onPress={() => {}} colors={colors} />
-          <MenuRow label="Contact Us" onPress={() => {}} colors={colors} />
+          <MenuRow label="Rate Lowball" onPress={handleRate} colors={colors} />
+          <MenuRow label="Privacy Policy" onPress={handlePrivacyPolicy} colors={colors} />
+          <MenuRow label="Terms of Service" onPress={handleTerms} colors={colors} />
+          <MenuRow label="Contact Us" onPress={handleContact} colors={colors} />
         </View>
 
         <TouchableOpacity style={styles.dangerButton} onPress={handleSignOut}>
           <Text style={[styles.dangerText, { color: colors.danger }]}>Sign Out</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.dangerButton} onPress={handleDeleteAccount}>
-          <Text style={[styles.dangerText, { color: colors.danger }]}>Delete Account</Text>
+        <TouchableOpacity style={styles.dangerButton} onPress={handleDeleteAccount} disabled={deleting}>
+          {deleting ? (
+            <ActivityIndicator color={colors.danger} />
+          ) : (
+            <Text style={[styles.dangerText, { color: colors.danger }]}>Delete Account</Text>
+          )}
         </TouchableOpacity>
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: 120 }} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 12,
+    paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4,
   },
-  headerTitle: { fontSize: 22, fontWeight: '600' },
+  headerTitle: { fontSize: 28, fontWeight: '700', letterSpacing: -0.5 },
   scroll: { paddingHorizontal: 16 },
   statsCard: { borderRadius: 16, padding: 20, marginBottom: 24 },
   statsLabel: { fontSize: 13 },
@@ -282,8 +426,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1,
   },
   menuLabel: { fontSize: 16 },
-  menuRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  menuRightText: { fontSize: 14 },
+  menuRight: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
+  menuRightText: { fontSize: 14, maxWidth: 180 },
   adFreeBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     paddingVertical: 8, paddingHorizontal: 4, marginBottom: 8,

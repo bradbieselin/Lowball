@@ -142,7 +142,7 @@ export default function ScanningScreen() {
           <TouchableOpacity style={[styles.retryButton, { backgroundColor: colors.accent }]} onPress={doScan}>
             <Text style={[styles.retryText, { color: colors.accentOnDark }]}>Retry</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.homeButton} onPress={() => navigation.navigate('Home')}>
+          <TouchableOpacity style={styles.homeButton} onPress={() => navigation.navigate('MainTabs')}>
             <Text style={[styles.homeText, { color: colors.textSecondary }]}>Back to Home</Text>
           </TouchableOpacity>
         </View>
@@ -152,7 +152,7 @@ export default function ScanningScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <TouchableOpacity style={styles.backButton} onPress={() => navigation.navigate('Home')}>
+      <TouchableOpacity style={styles.backButton} onPress={() => navigation.navigate('MainTabs')}>
         <Ionicons name="arrow-back" size={28} color={colors.textPrimary} />
       </TouchableOpacity>
 

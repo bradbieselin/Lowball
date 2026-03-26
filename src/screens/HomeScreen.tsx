@@ -3,25 +3,23 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   FlatList,
   Animated,
-  SafeAreaView,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../contexts/ThemeContext';
 import ScanCard, { ScanCardData } from '../components/ScanCard';
 import { useRecentScans } from '../hooks/useScans';
+import { useUserStats } from '../hooks/useUser';
 import { useAds } from '../hooks/useAds';
 import type { RootStackParamList } from '../navigation/RootNavigator';
 
-type HomeNav = NativeStackNavigationProp<RootStackParamList, 'Home'>;
-
-const SCAN_BUTTON_SIZE = 88;
+type HomeNav = NativeStackNavigationProp<RootStackParamList, 'MainTabs'>;
 
 const SKELETON_PLACEHOLDER_COUNT = 3;
 
@@ -96,29 +94,41 @@ const skeletonStyles = StyleSheet.create({
   },
 });
 
-function HowItWorksBar() {
+interface StatCardProps {
+  label: string;
+  value: string;
+  icon: React.ReactNode;
+}
+
+function StatCard({ label, value, icon }: StatCardProps) {
   const { colors } = useTheme();
   return (
-    <View style={[styles.howItWorks, { backgroundColor: colors.surfaceLight }]}>
-      <View style={styles.howStep}>
-        <View style={styles.howIcon}>
-          <Ionicons name="camera-outline" size={20} color={colors.accent} />
-        </View>
-        <Text style={[styles.howLabel, { color: colors.textSecondary }]}>Snap</Text>
+    <View style={[styles.statCard, { backgroundColor: colors.surface }]}>
+      <Text style={[styles.statValue, { color: colors.textPrimary }]}>{value}</Text>
+      <Text style={[styles.statLabel, { color: colors.textSecondary }]}>{label}</Text>
+      <View style={styles.statIconWrap}>
+        {icon}
       </View>
-      <View style={[styles.howDivider, { backgroundColor: colors.border }]} />
-      <View style={styles.howStep}>
-        <View style={styles.howIcon}>
-          <Ionicons name="search-outline" size={20} color={colors.accent} />
-        </View>
-        <Text style={[styles.howLabel, { color: colors.textSecondary }]}>Search</Text>
+    </View>
+  );
+}
+
+interface BigStatCardProps {
+  label: string;
+  value: string;
+  icon: React.ReactNode;
+}
+
+function BigStatCard({ label, value, icon }: BigStatCardProps) {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.bigStatCard, { backgroundColor: colors.surface }]}>
+      <View style={styles.bigStatContent}>
+        <Text style={[styles.bigStatValue, { color: colors.savings }]}>{value}</Text>
+        <Text style={[styles.bigStatLabel, { color: colors.textSecondary }]}>{label}</Text>
       </View>
-      <View style={[styles.howDivider, { backgroundColor: colors.border }]} />
-      <View style={styles.howStep}>
-        <View style={styles.howIcon}>
-          <MaterialCommunityIcons name="tag-outline" size={20} color={colors.accent} />
-        </View>
-        <Text style={[styles.howLabel, { color: colors.textSecondary }]}>Save</Text>
+      <View style={[styles.bigStatIconWrap, { backgroundColor: colors.surfaceLight }]}>
+        {icon}
       </View>
     </View>
   );
@@ -126,16 +136,16 @@ function HowItWorksBar() {
 
 export default function HomeScreen() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation<HomeNav>();
   const { data, isLoading, refetch, isRefetching, fetchNextPage, hasNextPage, isFetchingNextPage } = useRecentScans();
+  const { data: stats, isLoading: statsLoading } = useUserStats();
   const { loadAd: preloadAd } = useAds();
 
-  // Preload an ad so it's ready when the user finishes scanning
   useEffect(() => {
     preloadAd();
   }, [preloadAd]);
 
-  // Animations
   const fadeIn = useRef(new Animated.Value(0)).current;
 
   const scans: ScanCardData[] = (data?.pages ?? []).flatMap((page) =>
@@ -145,29 +155,13 @@ export default function HomeScreen() {
       productName: s.productName ?? 'Unknown Product',
       bestPrice: s.deals?.[0]?.price != null ? parseFloat(s.deals[0].price) : 0,
       originalPrice: s.estimatedRetailPrice != null ? parseFloat(s.estimatedRetailPrice) : 0,
+      aiConfidence: s.aiConfidence,
     }))
   );
 
   useEffect(() => {
     Animated.timing(fadeIn, { toValue: 1, duration: 600, useNativeDriver: true }).start();
   }, [fadeIn]);
-
-  const scanPressedRef = useRef(false);
-  const buttonTap = useRef(new Animated.Value(1)).current;
-
-  const handleScanPress = () => {
-    if (scanPressedRef.current) return;
-    scanPressedRef.current = true;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    Animated.sequence([
-      Animated.timing(buttonTap, { toValue: 0.88, duration: 80, useNativeDriver: true }),
-      Animated.timing(buttonTap, { toValue: 1, duration: 80, useNativeDriver: true }),
-    ]).start(() => {
-      navigation.navigate('Camera');
-      setTimeout(() => { scanPressedRef.current = false; }, 1000);
-    });
-  };
 
   const handleScanCardPress = useCallback((scanId: string) => {
     navigation.navigate('Results', { scanId });
@@ -187,49 +181,88 @@ export default function HomeScreen() {
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
+  const totalSavings = stats?.totalSavings ? `$${parseFloat(stats.totalSavings).toFixed(2)}` : '$0.00';
+  const totalScans = stats?.totalScans?.toString() ?? '0';
+  const dealsFound = stats?.dealsFound?.toString() ?? '0';
+
+  const ListHeader = useMemo(() => (
+    <Animated.View style={{ opacity: fadeIn }}>
+      {/* Big savings card */}
+      {statsLoading ? (
+        <View style={[styles.bigStatCard, { backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', height: 100 }]}>
+          <ActivityIndicator color={colors.accent} />
+        </View>
+      ) : (
+        <BigStatCard
+          label="All Time Potential Savings"
+          value={totalSavings}
+          icon={<MaterialCommunityIcons name="piggy-bank-outline" size={28} color={colors.savings} />}
+        />
+      )}
+
+      {/* Small stat cards row */}
+      <View style={styles.statRow}>
+        {statsLoading ? (
+          <>
+            <View style={[styles.statCard, { backgroundColor: colors.surface, flex: 1 }]}>
+              <ActivityIndicator color={colors.accent} />
+            </View>
+            <View style={[styles.statCard, { backgroundColor: colors.surface, flex: 1 }]}>
+              <ActivityIndicator color={colors.accent} />
+            </View>
+          </>
+        ) : (
+          <>
+            <StatCard
+              label="Total Scans"
+              value={totalScans}
+              icon={<Ionicons name="camera-outline" size={18} color={colors.textMuted} />}
+            />
+            <StatCard
+              label="Deals Found"
+              value={dealsFound}
+              icon={<MaterialCommunityIcons name="tag-outline" size={18} color={colors.textMuted} />}
+            />
+          </>
+        )}
+      </View>
+
+      {/* Recent scans header */}
+      <View style={styles.recentHeaderRow}>
+        <Text style={[styles.recentHeader, { color: colors.textPrimary }]}>Recent Scans</Text>
+        {scans.length > 0 && (
+          <Text style={[styles.recentCount, { color: colors.textMuted }]}>{scans.length}</Text>
+        )}
+      </View>
+    </Animated.View>
+  ), [fadeIn, statsLoading, colors, totalSavings, totalScans, dealsFound, scans.length]);
+
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <SafeAreaView style={styles.flex}>
+    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+      <View style={styles.flex}>
         {/* Header */}
         <Animated.View style={[styles.header, { opacity: fadeIn }]}>
-          <View>
-            <Text style={[styles.wordmark, { color: colors.textPrimary }]}>Lowball</Text>
-            <Text style={[styles.tagline, { color: colors.textMuted }]}>Snap. Search. Save.</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.profileButton}
-            onPress={() => navigation.navigate('Profile')}
-          >
-            <View style={[styles.profileInner, { backgroundColor: colors.surfaceLight }]}>
-              <Ionicons name="person" size={18} color={colors.textSecondary} />
-            </View>
-          </TouchableOpacity>
+          <Text style={[styles.wordmark, { color: colors.textPrimary }]}>Lowball</Text>
         </Animated.View>
 
-        {/* How it works */}
-        <Animated.View style={{ opacity: fadeIn }}>
-          <HowItWorksBar />
-        </Animated.View>
-
-        {/* Recent Scans — main body */}
-        <View style={styles.recentSection}>
-          <View style={styles.recentHeaderRow}>
-            <Text style={[styles.recentHeader, { color: colors.textPrimary }]}>Recent Scans</Text>
-            {scans.length > 0 && (
-              <Text style={[styles.recentCount, { color: colors.textMuted }]}>{scans.length}</Text>
-            )}
-          </View>
-
+        {/* Content */}
+        <View style={styles.content}>
           {isLoading ? (
-            <SkeletonList />
+            <View style={styles.listPadding}>
+              {ListHeader}
+              <SkeletonList />
+            </View>
           ) : scans.length === 0 ? (
-            <View style={[styles.emptyState, { backgroundColor: colors.surface }]}>
-              <View style={styles.emptyContent}>
-                <Ionicons name="scan-outline" size={40} color={colors.textMuted} />
-                <Text style={[styles.emptyTitle, { color: colors.textSecondary }]}>No scans yet</Text>
-                <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                  Point your camera at any product to find the best deals
-                </Text>
+            <View style={styles.listPadding}>
+              {ListHeader}
+              <View style={[styles.emptyState, { backgroundColor: colors.surface }]}>
+                <View style={styles.emptyContent}>
+                  <Ionicons name="scan-outline" size={40} color={colors.textMuted} />
+                  <Text style={[styles.emptyTitle, { color: colors.textSecondary }]}>No scans yet</Text>
+                  <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+                    Point your camera at any product to find the best deals
+                  </Text>
+                </View>
               </View>
             </View>
           ) : (
@@ -237,8 +270,9 @@ export default function HomeScreen() {
               data={scans}
               keyExtractor={(item) => item.id}
               renderItem={renderItem}
+              ListHeaderComponent={ListHeader}
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.listContent}
+              contentContainerStyle={styles.listPadding}
               onEndReached={handleEndReached}
               onEndReachedThreshold={0.5}
               refreshControl={
@@ -251,22 +285,7 @@ export default function HomeScreen() {
             />
           )}
         </View>
-
-        {/* Bottom scan button area */}
-        <View style={styles.scanSection}>
-          <Animated.View style={{ transform: [{ scale: buttonTap }] }}>
-            <TouchableOpacity
-              style={[styles.scanButton, { shadowColor: colors.accent }]}
-              onPress={handleScanPress}
-              activeOpacity={1}
-            >
-              <View style={[styles.scanButtonFill, { backgroundColor: colors.accent }]}>
-                <Ionicons name="scan" size={36} color={colors.accentOnDark} />
-              </View>
-            </TouchableOpacity>
-          </Animated.View>
-        </View>
-      </SafeAreaView>
+      </View>
     </View>
   );
 }
@@ -287,75 +306,82 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   wordmark: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '700',
     letterSpacing: -0.5,
   },
-  tagline: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  profileButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  profileInner: {
+
+  // Content
+  content: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 20,
+  },
+  listPadding: {
+    paddingHorizontal: 20,
+    paddingBottom: 120,
   },
 
-  // How it works
-  howItWorks: {
+  // Big stat card
+  bigStatCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 20,
-    marginTop: 12,
-    marginBottom: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    justifyContent: 'space-between',
     borderRadius: 16,
+    padding: 20,
+    marginTop: 16,
   },
-  howStep: {
-    alignItems: 'center',
+  bigStatContent: {
     flex: 1,
   },
-  howIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: 'rgba(48,209,88,0.12)',
+  bigStatValue: {
+    fontSize: 32,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+  },
+  bigStatLabel: {
+    fontSize: 14,
+    marginTop: 4,
+  },
+  bigStatIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
-  },
-  howLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  howDivider: {
-    width: 24,
-    height: 1,
-    marginHorizontal: 4,
-    marginBottom: 16,
   },
 
-  // Recent scans — main body
-  recentSection: {
-    flex: 1,
-    paddingHorizontal: 20,
+  // Stat cards row
+  statRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+    marginBottom: 24,
   },
+  statCard: {
+    flex: 1,
+    borderRadius: 16,
+    padding: 16,
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  statLabel: {
+    fontSize: 13,
+    marginBottom: 8,
+  },
+  statIconWrap: {
+    marginTop: 4,
+  },
+
+  // Recent scans
   recentHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
   },
   recentHeader: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
   },
   recentCount: {
@@ -384,32 +410,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 18,
-  },
-  listContent: {
-    paddingBottom: 24,
-  },
-
-  // Bottom scan button area
-  scanSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 20,
-    marginBottom: 16,
-  },
-  scanButton: {
-    width: SCAN_BUTTON_SIZE,
-    height: SCAN_BUTTON_SIZE,
-    borderRadius: SCAN_BUTTON_SIZE / 2,
-    overflow: 'hidden',
-    elevation: 8,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-  },
-  scanButtonFill: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });

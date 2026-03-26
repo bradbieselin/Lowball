@@ -143,3 +143,16 @@ export async function syncSubscription(status: 'free' | 'pro'): Promise<{ subscr
     body: JSON.stringify({ status }),
   });
 }
+
+export async function updateEmail(email: string): Promise<UserProfile> {
+  return apiFetch<UserProfile>('/api/user/profile', {
+    method: 'PUT',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function deleteAccount(): Promise<{ success: boolean }> {
+  return apiFetch<{ success: boolean }>('/api/user/account', {
+    method: 'DELETE',
+  });
+}

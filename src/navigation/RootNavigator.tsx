@@ -3,22 +3,24 @@ import { ActivityIndicator, View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AuthStack from './AuthStack';
+import TabNavigator from './TabNavigator';
 import OnboardingScreen from '../screens/OnboardingScreen';
-import HomeScreen from '../screens/HomeScreen';
 import CameraScreen from '../screens/CameraScreen';
 import ScanningScreen from '../screens/ScanningScreen';
 import ResultsScreen from '../screens/ResultsScreen';
-import ProfileScreen from '../screens/ProfileScreen';
 import { Colors } from '../constants/colors';
+import { useTheme } from '../contexts/ThemeContext';
 import { useAuthContext } from '../contexts/AuthContext';
 
 export type RootStackParamList = {
   Auth: undefined;
   Onboarding: undefined;
-  Home: undefined;
+  MainTabs: undefined;
   Camera: undefined;
   Scanning: { imageUri: string };
   Results: { scanId: string };
+  // Keep for backward compat with any navigation.navigate('Home') calls
+  Home: undefined;
   Profile: undefined;
 };
 
@@ -32,6 +34,7 @@ export function useOnboardingComplete() {
 let _setOnboardingDone: React.Dispatch<React.SetStateAction<boolean | null>> = () => {};
 
 export default function RootNavigator() {
+  const { colors } = useTheme();
   const { user, loading } = useAuthContext();
   const [onboardingDone, setOnboardingDone] = useState<boolean | null>(null);
   _setOnboardingDone = setOnboardingDone;
@@ -54,7 +57,7 @@ export default function RootNavigator() {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: Colors.background },
+        contentStyle: { backgroundColor: colors.background },
         animation: 'slide_from_right',
       }}
     >
@@ -70,11 +73,10 @@ export default function RootNavigator() {
           {!onboardingDone && (
             <Stack.Screen name="Onboarding" component={OnboardingScreen} />
           )}
-          <Stack.Screen name="Home" component={HomeScreen} />
+          <Stack.Screen name="MainTabs" component={TabNavigator} />
           <Stack.Screen name="Camera" component={CameraScreen} />
           <Stack.Screen name="Scanning" component={ScanningScreen} options={{ gestureEnabled: false }} />
           <Stack.Screen name="Results" component={ResultsScreen} options={{ gestureEnabled: false }} />
-          <Stack.Screen name="Profile" component={ProfileScreen} />
         </>
       )}
     </Stack.Navigator>

@@ -12,10 +12,23 @@ export function useScanProduct() {
 }
 
 export function useScan(scanId: string) {
+  const queryClient = useQueryClient();
   return useQuery({
     queryKey: ['scan', scanId],
     queryFn: () => getScan(scanId),
     enabled: !!scanId,
+    staleTime: 60 * 1000,
+    initialData: () => {
+      // Check if this scan is already in the scans list cache
+      const scansData = queryClient.getQueryData<any>(['scans']);
+      if (scansData?.pages) {
+        for (const page of scansData.pages) {
+          const match = page.scans?.find((s: any) => s.id === scanId);
+          if (match) return match;
+        }
+      }
+      return undefined;
+    },
   });
 }
 

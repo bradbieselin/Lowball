@@ -202,7 +202,7 @@ export default function ResultsScreen() {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.navigate('Home')} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <TouchableOpacity onPress={() => navigation.navigate('MainTabs')} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Results</Text>
@@ -211,7 +211,7 @@ export default function ResultsScreen() {
         <View style={styles.emptyContainer}>
           <Ionicons name="search-outline" size={64} color={colors.textMuted} />
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>No deals found</Text>
-          <TouchableOpacity style={[styles.scanAgainButton, { backgroundColor: colors.accent }]} onPress={() => navigation.navigate('Home')}>
+          <TouchableOpacity style={[styles.scanAgainButton, { backgroundColor: colors.accent }]} onPress={() => navigation.navigate('MainTabs')}>
             <Text style={[styles.scanAgainText, { color: colors.accentOnDark }]}>Scan Again</Text>
           </TouchableOpacity>
         </View>
@@ -222,7 +222,7 @@ export default function ResultsScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.navigate('Home')} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+        <TouchableOpacity onPress={() => navigation.navigate('MainTabs')} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Results</Text>
@@ -285,8 +285,49 @@ export default function ResultsScreen() {
                       <Text style={[styles.productName, { color: colors.textPrimary }]} numberOfLines={2}>{scan.productName}</Text>
                       <Ionicons name="pencil-outline" size={16} color={colors.textSecondary} style={styles.editIcon} />
                     </TouchableOpacity>
-                    <View style={[styles.categoryBadge, { backgroundColor: colors.surfaceLight }]}>
-                      <Text style={[styles.categoryText, { color: colors.textSecondary }]}>{scan.category}</Text>
+                    <View style={styles.badgeRow}>
+                      <View style={[styles.categoryBadge, { backgroundColor: colors.surfaceLight }]}>
+                        <Text style={[styles.categoryText, { color: colors.textSecondary }]}>{scan.category}</Text>
+                      </View>
+                      <View style={[
+                        styles.confidenceBadge,
+                        {
+                          backgroundColor: confidenceLevel === 'high' ? colors.savings + '20'
+                            : confidenceLevel === 'medium' ? colors.warning + '20'
+                            : confidenceLevel === 'user_corrected' ? colors.accent + '20'
+                            : colors.danger + '20',
+                        },
+                      ]}>
+                        <Ionicons
+                          name={
+                            confidenceLevel === 'high' ? 'checkmark-circle'
+                              : confidenceLevel === 'user_corrected' ? 'person'
+                              : confidenceLevel === 'medium' ? 'help-circle'
+                              : 'warning'
+                          }
+                          size={12}
+                          color={
+                            confidenceLevel === 'high' ? colors.savings
+                              : confidenceLevel === 'medium' ? colors.warning
+                              : confidenceLevel === 'user_corrected' ? colors.textSecondary
+                              : colors.danger
+                          }
+                        />
+                        <Text style={[
+                          styles.confidenceText,
+                          {
+                            color: confidenceLevel === 'high' ? colors.savings
+                              : confidenceLevel === 'medium' ? colors.warning
+                              : confidenceLevel === 'user_corrected' ? colors.textSecondary
+                              : colors.danger,
+                          },
+                        ]}>
+                          {confidenceLevel === 'high' ? 'High match'
+                            : confidenceLevel === 'medium' ? 'Partial match'
+                            : confidenceLevel === 'user_corrected' ? 'Corrected'
+                            : 'Low match'}
+                        </Text>
+                      </View>
                     </View>
                   </>
                 )}
@@ -374,8 +415,14 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   productName: { fontSize: 18, fontWeight: '600', flex: 1 },
   editIcon: { marginLeft: 8 },
-  categoryBadge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, alignSelf: 'flex-start' },
+  badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  categoryBadge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
   categoryText: { fontSize: 13 },
+  confidenceBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4,
+  },
+  confidenceText: { fontSize: 12, fontWeight: '600' },
 
   // Edit mode
   editInput: {

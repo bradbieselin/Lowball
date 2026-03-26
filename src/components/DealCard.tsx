@@ -42,10 +42,10 @@ function DealCard({ deal, onPress }: DealCardProps) {
         )}
       </View>
       <View style={styles.priceSection}>
-        <Text style={[styles.price, { color: colors.accent }]}>{formatPrice(deal.price)}</Text>
+        <Text style={[styles.price, { color: colors.savings }]}>{formatPrice(deal.price)}</Text>
         {deal.savingsPercent != null && deal.savingsPercent > 0 && (
-          <View style={[styles.savingsBadge, { backgroundColor: colors.accent }]}>
-            <Text style={[styles.savingsText, { color: colors.accentOnDark }]}>-{deal.savingsPercent}%</Text>
+          <View style={[styles.savingsBadge, { backgroundColor: colors.savings }]}>
+            <Text style={[styles.savingsText, { color: '#FFFFFF' }]}>-{deal.savingsPercent}%</Text>
           </View>
         )}
       </View>
